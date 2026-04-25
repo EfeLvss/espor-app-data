@@ -4,26 +4,21 @@ import time
 import requests
 import psutil
 import threading
-import multiprocessing
-import webview
+import webbrowser
 import customtkinter as ctk
 from tkinter import messagebox
 from pypresence import Presence
 
-CLIENT_ID = "1497357433645961237"
+CLIENT_ID = "BURAYA_CLIENT_ID_YAZILACAK"
 WEBHOOK_URL = "https://discord.com/api/webhooks/1497711458362982411/MA1_NY_s0kFLXf0M-lQU_ISoHDtOXyi1HYJPRl_jnXlWic08qxkafwtD0-I8kyuQ8RRd"
 
 APP_VERSION = "1.0"
-VERSION_URL = "https://raw.githubusercontent.com/EfeLvss/repo/main/version.txt"
-CODE_URL = "https://raw.githubusercontent.com/EfeLvss/repo/main/main.py"
-ROSTER_URL = "https://raw.githubusercontent.com/EfeLvss/repo/main/kadro.json"
+VERSION_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/version.txt"
+CODE_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/main.py"
+ROSTER_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/kadro.json"
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
-
-def open_stream(url):
-    webview.create_window('PlayzEsport Yayın', url, width=1024, height=576, background_color='#000000')
-    webview.start()
 
 class App(ctk.CTk):
     def __init__(self):
@@ -41,30 +36,30 @@ class App(ctk.CTk):
             "TR": {
                 "home": "Ana Sayfa", "roster": "Takım Kadrosu", "scores": "Maç Skorları", "watch": "Maç İzle",
                 "cheat": "Hile Kontrol", "settings": "Ayarlar", "welcome": "PlayzEsportHub'a Hoş Geldin!",
-                "info": "Uygulama üzerinden maçları izleyebilir ve kadroları takip edebilirsin.",
+                "info": "Maçları izleyebilir ve kadroları takip edebilirsiniz.",
                 "game_select": "Kadro Seçimi", "roster_title": "Kadrosu",
                 "live_scores": "Canlı Skorlar", "watch_live": "Canlı Yayın", "watch_replay": "Maç Tekrarları",
-                "stream_info": "Yayın sadece platformsuz saf oynatıcı (embed) olarak açılacaktır.",
-                "start_stream": "🔴 Canlı Yayını Başlat", "theme": "Açık / Koyu Tema", "lang": "Dil: Türkçe / English",
-                "cheat_warn": "Tarama için oyunun açık olması lazım!", "clean": "Sistem Temiz! Hile bulunamadı.",
-                "found": "Şüpheli yazılım/işlem bulundu:", "scanning": "Sistem derinlemesine taranıyor..."
+                "stream_info": "Yayın harici tarayıcıda platformsuz açılacaktır.",
+                "start_stream": "🔴 Canlı Yayını Başlat", "theme": "Tema Değiştir", "lang": "Dil / Language",
+                "cheat_warn": "Tarama için oyunun açık olması lazım!", "clean": "Sistem Temiz!",
+                "found": "Zararlı işlem bulundu:", "scanning": "Derin tarama yapılıyor...", "upd_wait": "Güncelleniyor..."
             },
             "EN": {
-                "home": "Home", "roster": "Team Roster", "scores": "Match Scores", "watch": "Watch Match",
+                "home": "Home", "roster": "Roster", "scores": "Scores", "watch": "Watch",
                 "cheat": "Anti-Cheat", "settings": "Settings", "welcome": "Welcome to PlayzEsportHub!",
-                "info": "Watch matches and track rosters directly through the app.",
+                "info": "Watch matches and track rosters directly.",
                 "game_select": "Select Roster", "roster_title": "Roster",
-                "live_scores": "Live Scores", "watch_live": "Live Stream", "watch_replay": "Match Replays",
-                "stream_info": "The stream will open as a pure embed player without platform UI.",
-                "start_stream": "🔴 Start Live Stream", "theme": "Light / Dark Theme", "lang": "Language: Türkçe / English",
-                "cheat_warn": "The game must be running for the scan!", "clean": "System Clean! No cheats found.",
-                "found": "Suspicious software/process found:", "scanning": "Deep scanning system..."
+                "live_scores": "Live Scores", "watch_live": "Live Stream", "watch_replay": "Replays",
+                "stream_info": "Stream will open in browser as embed.",
+                "start_stream": "🔴 Start Stream", "theme": "Switch Theme", "lang": "Language / Dil",
+                "cheat_warn": "Game must be running for scan!", "clean": "System Clean!",
+                "found": "Suspicious process found:", "scanning": "Deep scanning...", "upd_wait": "Updating..."
             }
         }
         
         self.roster_data = {
-            "Valorant": ["Oyuncu 1", "Oyuncu 2"], "Brawl Stars": ["Oyuncu 1", "Oyuncu 2"],
-            "eFootball": ["Talha", "EfeLvs"], "Roblox": ["Oyuncu 1", "Oyuncu 2"], "Minecraft": ["Oyuncu 1", "Oyuncu 2"]
+            "Valorant": ["EfeLvs", "Talha"], "Brawl Stars": ["Oyuncu 1"],
+            "eFootball": ["Talha", "EfeLvs"], "Roblox": ["Oyuncu 1"], "Minecraft": ["Wurst Hunter"]
         }
         
         self.auto_update()
@@ -75,21 +70,22 @@ class App(ctk.CTk):
 
     def auto_update(self):
         try:
-            resp = requests.get(VERSION_URL, timeout=3)
+            resp = requests.get(VERSION_URL, timeout=5)
             if resp.status_code == 200:
-                remote_version = resp.text.strip()
-                if remote_version != APP_VERSION:
-                    code_resp = requests.get(CODE_URL, timeout=5)
+                remote_v = resp.text.strip()
+                if remote_v != APP_VERSION:
+                    code_resp = requests.get(CODE_URL, timeout=10)
                     if code_resp.status_code == 200:
-                        with open(sys.argv[0], 'w', encoding='utf-8') as f:
+                        file_path = os.path.abspath(sys.argv[0])
+                        with open(file_path, 'w', encoding='utf-8') as f:
                             f.write(code_resp.text)
-                        os.execv(sys.executable, ['python'] + sys.argv)
+                        os.execv(sys.executable, [sys.executable] + sys.argv)
         except:
             pass
 
     def fetch_remote_roster(self):
         try:
-            response = requests.get(ROSTER_URL, timeout=3)
+            response = requests.get(ROSTER_URL, timeout=5)
             if response.status_code == 200:
                 self.roster_data = response.json()
         except:
@@ -99,26 +95,25 @@ class App(ctk.CTk):
         try:
             self.rpc = Presence(CLIENT_ID)
             self.rpc.connect()
-            self.rpc.update(state="PlayzEsportHub Kullanıyor", start=time.time())
+            self.rpc.update(state="PlayzEsportHub", start=time.time())
         except:
             pass
 
     def check_game_status(self):
-        games = ["javaw.exe", "minecraft.exe", "valorant.exe"]
-        try:
-            for proc in psutil.process_iter(['name']):
-                if proc.info['name'].lower() in games:
-                    requests.post(WEBHOOK_URL, json={"content": "🎮 **PlayzEsportHub:** Bir kullanıcı şu an oyunda!"})
-                    break
-        except:
-            pass
+        while True:
+            try:
+                for proc in psutil.process_iter(['name']):
+                    if proc.info['name'].lower() in ["javaw.exe", "valorant.exe", "minecraft.exe"]:
+                        requests.post(WEBHOOK_URL, json={"content": f"🎮 Kullanıcı şu an {proc.info['name']} oynuyor!"})
+                        return
+            except: pass
+            time.sleep(60)
 
     def setup_ui(self):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
 
-        # Çift renk ayarları (Açık Tema Rengi, Koyu Tema Rengi)
-        self.nav_frame = ctk.CTkFrame(self, corner_radius=0, fg_color=("#EBEBEB", "#121212"))
+        self.nav_frame = ctk.CTkFrame(self, corner_radius=0, fg_color=("#F5F5F5", "#121212"))
         self.nav_frame.grid(row=0, column=0, sticky="nsew")
         self.nav_frame.grid_rowconfigure(8, weight=1)
 
@@ -148,29 +143,33 @@ class App(ctk.CTk):
 
         self.frames = {}
         for F in ("home", "roster", "scores", "kick", "settings"):
-            frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-            self.frames[F] = frame
-            frame.grid(row=0, column=0, sticky="nsew")
+            self.frames[F] = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+            self.frames[F].grid(row=0, column=0, sticky="nsew")
 
         self.main_frame.grid_rowconfigure(0, weight=1)
         self.main_frame.grid_columnconfigure(0, weight=1)
 
+        self.refresh_ui()
+        self.show_frame("home")
+
+    def create_nav_btn(self, key, command, fg_color="#FF1493", hover_color="#FF69B4", border=0):
+        txt = self.texts[self.current_lang][key]
+        if border > 0:
+            return ctk.CTkButton(self.nav_frame, text=txt, font=self.btn_font, fg_color=fg_color, border_color="#FF1493", border_width=border, hover_color=("#E0E0E0", "#33001b"), text_color="#FF1493", height=45, corner_radius=10, command=command)
+        return ctk.CTkButton(self.nav_frame, text=txt, font=self.btn_font, fg_color=fg_color, hover_color=hover_color, height=45, corner_radius=10, command=command, text_color="white")
+
+    def refresh_ui(self):
+        for f in self.frames.values():
+            for w in f.winfo_children(): w.destroy()
+        
         self.build_home()
         self.build_roster()
         self.build_scores()
         self.build_kick()
         self.build_settings()
-        self.show_frame("home")
-
-    def create_nav_btn(self, text_key, command, fg_color="#FF1493", hover_color="#FF69B4", border=0):
-        text = self.texts[self.current_lang][text_key]
-        if border > 0:
-            return ctk.CTkButton(self.nav_frame, text=text, font=self.btn_font, fg_color=fg_color, border_color="#FF1493", border_width=border, hover_color="#33001b", text_color="#FF1493", height=45, corner_radius=10, command=command)
-        return ctk.CTkButton(self.nav_frame, text=text, font=self.btn_font, fg_color=fg_color, hover_color=hover_color, height=45, corner_radius=10, command=command)
 
     def show_frame(self, name):
-        for frame in self.frames.values():
-            frame.grid_remove()
+        for f in self.frames.values(): f.grid_remove()
         self.frames[name].grid()
 
     def show_home(self): self.show_frame("home")
@@ -180,138 +179,73 @@ class App(ctk.CTk):
     def show_settings(self): self.show_frame("settings")
 
     def build_home(self):
-        frame = self.frames["home"]
-        self.lbl_welcome = ctk.CTkLabel(frame, text=self.texts[self.current_lang]["welcome"], font=self.title_font, text_color=("#000000", "#FFFFFF"))
-        self.lbl_welcome.pack(pady=(60, 15))
-        self.lbl_info = ctk.CTkLabel(frame, text=self.texts[self.current_lang]["info"], font=self.main_font, text_color="gray")
-        self.lbl_info.pack(pady=10)
+        f = self.frames["home"]
+        ctk.CTkLabel(f, text=self.texts[self.current_lang]["welcome"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=(60, 15))
+        ctk.CTkLabel(f, text=self.texts[self.current_lang]["info"], font=self.main_font, text_color="gray").pack(pady=10)
 
     def build_roster(self):
-        frame = self.frames["roster"]
-        self.lbl_roster_title = ctk.CTkLabel(frame, text=self.texts[self.current_lang]["game_select"], font=self.title_font, text_color=("#000000", "#FFFFFF"))
-        self.lbl_roster_title.pack(pady=(30, 20))
-        
-        games_frame = ctk.CTkScrollableFrame(frame, fg_color="transparent")
-        games_frame.pack(fill="both", expand=True, padx=30)
-        
-        games = ["Valorant", "Brawl Stars", "eFootball", "Roblox", "Minecraft"]
-        for i, game in enumerate(games):
-            btn = ctk.CTkButton(games_frame, text=game, font=self.btn_font, height=70, corner_radius=15, fg_color=("#F0F0F0", "#2A2A2A"), text_color=("#000000", "#FFFFFF"), hover_color="#FF1493", command=lambda g=game: self.show_team_players(g))
-            btn.grid(row=i//2, column=i%2, padx=10, pady=10, sticky="nsew")
-            games_frame.grid_columnconfigure(i%2, weight=1)
-            
-        self.players_label = ctk.CTkLabel(frame, text="", font=ctk.CTkFont(family="Segoe UI", size=18, weight="bold"), text_color=("#000000", "#FFFFFF"))
-        self.players_label.pack(pady=20)
+        f = self.frames["roster"]
+        ctk.CTkLabel(f, text=self.texts[self.current_lang]["game_select"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=20)
+        sf = ctk.CTkScrollableFrame(f, fg_color="transparent")
+        sf.pack(fill="both", expand=True, padx=30)
+        for i, g in enumerate(self.roster_data.keys()):
+            b = ctk.CTkButton(sf, text=g, font=self.btn_font, height=70, corner_radius=15, fg_color=("#EEEEEE", "#2A2A2A"), text_color=("#121212", "#FFFFFF"), hover_color="#FF1493", command=lambda x=g: self.show_players(x))
+            b.grid(row=i//2, column=i%2, padx=10, pady=10, sticky="nsew")
+            sf.grid_columnconfigure(i%2, weight=1)
+        self.p_lbl = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=18, weight="bold"), text_color=("#121212", "#FFFFFF"))
+        self.p_lbl.pack(pady=20)
 
-    def show_team_players(self, game):
-        players = "\n".join(self.roster_data.get(game, []))
-        self.players_label.configure(text=f"━ {game} {self.texts[self.current_lang]['roster_title']} ━\n\n{players}")
+    def show_players(self, g):
+        self.p_lbl.configure(text=f"━ {g} {self.texts[self.current_lang]['roster_title']} ━\n\n" + "\n".join(self.roster_data[g]))
 
     def build_scores(self):
-        frame = self.frames["scores"]
-        self.lbl_scores_title = ctk.CTkLabel(frame, text=self.texts[self.current_lang]["live_scores"], font=self.title_font, text_color=("#000000", "#FFFFFF"))
-        self.lbl_scores_title.pack(pady=(30, 30))
-        
-        score_frame = ctk.CTkFrame(frame, fg_color=("#F0F0F0", "#2A2A2A"), corner_radius=15)
-        score_frame.pack(padx=50, fill="x")
-        ctk.CTkLabel(score_frame, text="PlayzEsport  3 - 1  G2 Esports", font=self.main_font, text_color=("#000000", "#FFFFFF")).pack(pady=15)
+        f = self.frames["scores"]
+        ctk.CTkLabel(f, text=self.texts[self.current_lang]["live_scores"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=30)
+        box = ctk.CTkFrame(f, fg_color=("#EEEEEE", "#2A2A2A"), corner_radius=15)
+        box.pack(padx=50, fill="x")
+        ctk.CTkLabel(box, text="PlayzEsport  3 - 1  G2", font=self.main_font, text_color=("#121212", "#FFFFFF")).pack(pady=15)
 
     def build_kick(self):
-        frame = self.frames["kick"]
-        
-        self.watch_tab = ctk.CTkSegmentedButton(frame, values=[self.texts[self.current_lang]["watch_live"], self.texts[self.current_lang]["watch_replay"]], command=self.switch_watch_tab, font=self.btn_font, selected_color="#FF1493", selected_hover_color="#FF69B4")
-        self.watch_tab.pack(pady=(20, 10), padx=30, fill="x")
-        self.watch_tab.set(self.texts[self.current_lang]["watch_live"])
-
-        self.live_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        self.replay_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        
-        self.live_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        self.lbl_stream_info = ctk.CTkLabel(self.live_frame, text=self.texts[self.current_lang]["stream_info"], font=self.main_font, text_color="gray")
-        self.lbl_stream_info.pack(pady=(40, 20))
-        
-        self.btn_start_stream = ctk.CTkButton(self.live_frame, text=self.texts[self.current_lang]["start_stream"], font=self.btn_font, height=60, fg_color="#FF1493", hover_color="#FF69B4", command=lambda: self.launch_stream("https://player.kick.com/eray"))
-        self.btn_start_stream.pack(pady=10)
-
-        ctk.CTkButton(self.replay_frame, text="▶ PlayzEsport vs G2 - Büyük Final", font=self.btn_font, height=55, fg_color=("#F0F0F0", "#2A2A2A"), text_color=("#000000", "#FFFFFF"), hover_color="#FF1493", command=lambda: self.launch_stream("https://player.kick.com/eray")).pack(pady=10, fill="x", padx=50)
-
-    def switch_watch_tab(self, value):
-        if value == self.texts[self.current_lang]["watch_live"]:
-            self.replay_frame.pack_forget()
-            self.live_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        else:
-            self.live_frame.pack_forget()
-            self.replay_frame.pack(fill="both", expand=True, padx=10, pady=10)
-
-    def launch_stream(self, url):
-        p = multiprocessing.Process(target=open_stream, args=(url,))
-        p.start()
+        f = self.frames["kick"]
+        self.tab = ctk.CTkSegmentedButton(f, values=[self.texts[self.current_lang]["watch_live"], self.texts[self.current_lang]["watch_replay"]], font=self.btn_font, selected_color="#FF1493")
+        self.tab.pack(pady=20, padx=30, fill="x")
+        self.tab.set(self.texts[self.current_lang]["watch_live"])
+        ctk.CTkLabel(f, text=self.texts[self.current_lang]["stream_info"], font=self.main_font, text_color="gray").pack(pady=20)
+        ctk.CTkButton(f, text=self.texts[self.current_lang]["start_stream"], font=self.btn_font, height=60, fg_color="#FF1493", command=lambda: webbrowser.open("https://player.kick.com/eray")).pack()
 
     def build_settings(self):
-        frame = self.frames["settings"]
-        self.lbl_settings = ctk.CTkLabel(frame, text=self.texts[self.current_lang]["settings"], font=self.title_font, text_color=("#000000", "#FFFFFF"))
-        self.lbl_settings.pack(pady=(30, 30))
-        
-        self.btn_theme = ctk.CTkButton(frame, text=self.texts[self.current_lang]["theme"], font=self.btn_font, command=lambda: ctk.set_appearance_mode("light" if ctk.get_appearance_mode() == "Dark" else "dark"), height=45, fg_color=("#F0F0F0", "#2A2A2A"), text_color=("#000000", "#FFFFFF"), hover_color="#FF1493")
-        self.btn_theme.pack(pady=15)
-        
-        self.btn_lang = ctk.CTkButton(frame, text=self.texts[self.current_lang]["lang"], font=self.btn_font, command=self.toggle_lang, height=45, fg_color=("#F0F0F0", "#2A2A2A"), text_color=("#000000", "#FFFFFF"), hover_color="#FF1493")
-        self.btn_lang.pack(pady=15)
+        f = self.frames["settings"]
+        ctk.CTkLabel(f, text=self.texts[self.current_lang]["settings"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=30)
+        ctk.CTkButton(f, text=self.texts[self.current_lang]["theme"], font=self.btn_font, height=45, fg_color=("#EEEEEE", "#2A2A2A"), text_color=("#121212", "#FFFFFF"), command=self.switch_theme).pack(pady=10)
+        ctk.CTkButton(f, text=self.texts[self.current_lang]["lang"], font=self.btn_font, height=45, fg_color=("#EEEEEE", "#2A2A2A"), text_color=("#121212", "#FFFFFF"), command=self.switch_lang).pack(pady=10)
 
-    def toggle_lang(self):
+    def switch_theme(self):
+        ctk.set_appearance_mode("light" if ctk.get_appearance_mode() == "Dark" else "dark")
+
+    def switch_lang(self):
         self.current_lang = "EN" if self.current_lang == "TR" else "TR"
-        self.update_texts()
-
-    def update_texts(self):
-        # Update Nav Buttons
         self.btn_home.configure(text=self.texts[self.current_lang]["home"])
         self.btn_team.configure(text=self.texts[self.current_lang]["roster"])
         self.btn_scores.configure(text=self.texts[self.current_lang]["scores"])
         self.btn_kick.configure(text=self.texts[self.current_lang]["watch"])
         self.btn_cheat.configure(text=self.texts[self.current_lang]["cheat"])
         self.btn_settings.configure(text=self.texts[self.current_lang]["settings"])
-        
-        # Update Labels
-        self.lbl_welcome.configure(text=self.texts[self.current_lang]["welcome"])
-        self.lbl_info.configure(text=self.texts[self.current_lang]["info"])
-        self.lbl_roster_title.configure(text=self.texts[self.current_lang]["game_select"])
-        self.lbl_scores_title.configure(text=self.texts[self.current_lang]["live_scores"])
-        self.lbl_stream_info.configure(text=self.texts[self.current_lang]["stream_info"])
-        self.btn_start_stream.configure(text=self.texts[self.current_lang]["start_stream"])
-        self.lbl_settings.configure(text=self.texts[self.current_lang]["settings"])
-        self.btn_theme.configure(text=self.texts[self.current_lang]["theme"])
-        self.btn_lang.configure(text=self.texts[self.current_lang]["lang"])
-        
-        self.watch_tab.configure(values=[self.texts[self.current_lang]["watch_live"], self.texts[self.current_lang]["watch_replay"]])
-        self.watch_tab.set(self.texts[self.current_lang]["watch_live"])
-        self.players_label.configure(text="")
+        self.refresh_ui()
 
     def run_cheat_scan(self):
         messagebox.showinfo("Anti-Cheat", self.texts[self.current_lang]["scanning"])
-        
-        # Daha detaylı imza taraması
-        cheat_signatures = ["wurst", "cheatengine", "vape", "huzuni", "aimbot", "injector", "xigncode", "memoryhacker", "macro"]
+        sigs = ["wurst", "cheatengine", "vape", "huzuni", "aimbot", "killaura", "metin2mod", "injector"]
         found = False
-        
         try:
-            for proc in psutil.process_iter(['name', 'exe']):
-                name = proc.info['name'].lower()
-                if proc.info['exe']:
-                    exe_path = proc.info['exe'].lower()
-                else:
-                    exe_path = ""
-                
-                if any(sig in name or sig in exe_path for sig in cheat_signatures):
-                    messagebox.showerror("Tehlike", f"{self.texts[self.current_lang]['found']} {name}")
-                    found = True
-                    break
-        except:
-            pass
-            
-        if not found:
-            messagebox.showinfo("Sonuç", self.texts[self.current_lang]["clean"])
+            for p in psutil.process_iter(['name', 'exe']):
+                n = p.info['name'].lower()
+                path = (p.info['exe'] or "").lower()
+                if any(s in n or s in path for s in sigs):
+                    messagebox.showerror("ALARM", f"{self.texts[self.current_lang]['found']} {n}")
+                    found = True; break
+        except: pass
+        if not found: messagebox.showinfo("OK", self.texts[self.current_lang]["clean"])
 
 if __name__ == "__main__":
-    multiprocessing.freeze_support()
     app = App()
     app.mainloop()
