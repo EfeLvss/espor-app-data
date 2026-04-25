@@ -9,7 +9,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 from pypresence import Presence
 
-CLIENT_ID = "BURAYA_CLIENT_ID_YAZILACAK"
+CLIENT_ID = "1497357433645961237"
 WEBHOOK_URL = "https://discord.com/api/webhooks/1497711458362982411/MA1_NY_s0kFLXf0M-lQU_ISoHDtOXyi1HYJPRl_jnXlWic08qxkafwtD0-I8kyuQ8RRd"
 
 APP_VERSION = "1.0"
