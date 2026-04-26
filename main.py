@@ -15,7 +15,7 @@ from pypresence import Presence
 CLIENT_ID = "1497357433645961237"
 WEBHOOK_URL = "https://discord.com/api/webhooks/1497711458362982411/MA1_NY_s0kFLXf0M-lQU_ISoHDtOXyi1HYJPRl_jnXlWic08qxkafwtD0-I8kyuQ8RRd"
 
-APP_VERSION = "2.1"
+APP_VERSION = "2.2"
 VERSION_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/version.txt"
 CODE_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/main.py"
 ROSTER_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/kadro.json"
@@ -35,6 +35,7 @@ class OverlayWindow(ctk.CTkToplevel):
         super().__init__(parent)
         self.parent = parent
         self.running = True
+        self.cached_ping = 0
 
         self.overrideredirect(True)
         self.attributes("-topmost", True)
@@ -59,6 +60,9 @@ class OverlayWindow(ctk.CTkToplevel):
 
         self.after(150, self.enable_clickthrough)
         self.after(100, self.force_topmost)
+
+        # Ping'i ayrı thread'de yavaş güncelle = daha az kasma
+        threading.Thread(target=self.ping_loop, daemon=True).start()
         self.update_overlay()
 
     def enable_clickthrough(self):
@@ -73,10 +77,15 @@ class OverlayWindow(ctk.CTkToplevel):
         except:
             pass
 
+    def ping_loop(self):
+        while self.running:
+            self.cached_ping = self.get_ping()
+            time.sleep(3)  # çok daha hafif
+
     def get_ping(self):
         try:
             start = time.time()
-            s = socket.create_connection(("8.8.8.8", 53), timeout=0.6)
+            s = socket.create_connection(("8.8.8.8", 53), timeout=0.5)
             s.close()
             return int((time.time() - start) * 1000)
         except:
@@ -90,18 +99,17 @@ class OverlayWindow(ctk.CTkToplevel):
                 self.geometry("+2+2")
             except:
                 pass
-            self.after(1000, self.force_topmost)
+            self.after(1500, self.force_topmost)  # daha seyrek = daha hafif
 
     def update_overlay(self):
         if not self.running:
             return
 
-        ping = self.get_ping()
         ram = int(psutil.virtual_memory().percent)
         tps = "20.0"
 
-        self.label.configure(text=f"TPS:{tps} | P:{ping} | R:{ram}%")
-        self.after(1500, self.update_overlay)
+        self.label.configure(text=f"TPS:{tps} | P:{self.cached_ping} | R:{ram}%")
+        self.after(2000, self.update_overlay)  # daha seyrek = daha hafif
 
     def stop_overlay(self):
         self.running = False
@@ -138,6 +146,7 @@ class App(ctk.CTk):
                 "roster_title": "Kadrosu",
                 "live_scores": "Canlı Maç Skorları",
                 "theme": "Tema Değiştir",
+                "lang": "Dil / Language",
                 "clean": "Sistem Temiz!",
                 "found": "Şüpheli öğe bulundu:",
                 "scanning": "Derin tarama başlatıldı...",
@@ -149,6 +158,33 @@ class App(ctk.CTk):
                 "overlay_off": "Overlay Kapat",
                 "boost_mc": "Minecraft Boost Aç",
                 "boost_info": "Minecraft önceliği yükseltildi."
+            },
+            "EN": {
+                "home": "Home",
+                "roster": "Roster",
+                "scores": "Match Scores",
+                "watch": "Watch Match",
+                "performance": "Performance",
+                "cheat": "Anti-Cheat (Deep Scan)",
+                "settings": "Settings",
+                "welcome": "Welcome to PlayzEsportHub!",
+                "info": "Track rosters, streams and performance tools.",
+                "game_select": "Roster Selection",
+                "roster_title": "Roster",
+                "live_scores": "Live Match Scores",
+                "theme": "Switch Theme",
+                "lang": "Language / Dil",
+                "clean": "System Clean!",
+                "found": "Suspicious item found:",
+                "scanning": "Deep scan started...",
+                "watch_live": "🔴 Watch Live Match",
+                "watch_history": "📺 Watch Match History",
+                "roster_panel_title": "Player Panel",
+                "scan_done": "Scan completed!",
+                "overlay_on": "Enable Overlay",
+                "overlay_off": "Disable Overlay",
+                "boost_mc": "Enable Minecraft Boost",
+                "boost_info": "Minecraft priority increased."
             }
         }
 
@@ -219,15 +255,12 @@ class App(ctk.CTk):
             print("Update hatası:", e)
 
     def auto_update_loop(self):
-        # Açılışta hemen kontrol
         self.auto_update()
 
-        # İlk 20 saniye sık kontrol
         for _ in range(4):
             time.sleep(5)
             self.auto_update()
 
-        # Sonra normal kontrol
         while True:
             time.sleep(30)
             self.auto_update()
@@ -291,9 +324,21 @@ class App(ctk.CTk):
             pass
 
         if boosted:
-            messagebox.showinfo("Boost", self.texts["TR"]["boost_info"])
+            messagebox.showinfo("Boost", self.texts[self.current_lang]["boost_info"])
         else:
-            messagebox.showwarning("Boost", "Minecraft açık değil kanka.")
+            messagebox.showwarning("Boost", "Minecraft açık değil kanka." if self.current_lang == "TR" else "Minecraft is not open.")
+
+    # ---------------- SETTINGS ACTIONS ----------------
+    def switch_theme(self):
+        current = ctk.get_appearance_mode()
+        if current == "Dark":
+            ctk.set_appearance_mode("light")
+        else:
+            ctk.set_appearance_mode("dark")
+
+    def switch_lang(self):
+        self.current_lang = "EN" if self.current_lang == "TR" else "TR"
+        self.refresh_ui()
 
     # ---------------- UI ----------------
     def setup_ui(self):
@@ -343,7 +388,7 @@ class App(ctk.CTk):
         self.show_frame("home")
 
     def create_nav_btn(self, key, command, fg_color="#FF1493", hover_color="#FF69B4", border=0):
-        txt = self.texts["TR"][key]
+        txt = self.texts[self.current_lang][key]
         if border > 0:
             return ctk.CTkButton(
                 self.nav_frame, text=txt, font=self.btn_font, fg_color=fg_color,
@@ -362,10 +407,19 @@ class App(ctk.CTk):
 
         self.build_home()
         self.build_roster()
-        self.build_scores()
+        self.buildScores = self.build_scores
         self.build_watch()
         self.build_performance()
         self.build_settings()
+
+        # nav textleri de yenile
+        self.btn_home.configure(text=self.texts[self.current_lang]["home"])
+        self.btn_team.configure(text=self.texts[self.current_lang]["roster"])
+        self.btn_scores.configure(text=self.texts[self.current_lang]["scores"])
+        self.btn_watch.configure(text=self.texts[self.current_lang]["watch"])
+        self.btn_perf.configure(text=self.texts[self.current_lang]["performance"])
+        self.btn_cheat.configure(text=self.texts[self.current_lang]["cheat"])
+        self.btn_settings.configure(text=self.texts[self.current_lang]["settings"])
 
     def show_frame(self, name):
         for f in self.frames.values():
@@ -381,12 +435,12 @@ class App(ctk.CTk):
 
     def build_home(self):
         f = self.frames["home"]
-        ctk.CTkLabel(f, text=self.texts["TR"]["welcome"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=(70, 15))
-        ctk.CTkLabel(f, text=self.texts["TR"]["info"], font=self.main_font, text_color="gray").pack(pady=10)
+        ctk.CTkLabel(f, text=self.texts[self.current_lang]["welcome"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=(70, 15))
+        ctk.CTkLabel(f, text=self.texts[self.current_lang]["info"], font=self.main_font, text_color="gray").pack(pady=10)
 
     def build_roster(self):
         f = self.frames["roster"]
-        ctk.CTkLabel(f, text=self.texts["TR"]["game_select"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=20)
+        ctk.CTkLabel(f, text=self.texts[self.current_lang]["game_select"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=20)
 
         container = ctk.CTkFrame(f, fg_color="transparent")
         container.pack(fill="both", expand=True, padx=20, pady=10)
@@ -397,10 +451,10 @@ class App(ctk.CTk):
         right = ctk.CTkFrame(container, corner_radius=18, fg_color=("#EEEEEE", "#222222"))
         right.pack(side="left", fill="both", expand=True, pady=10)
 
-        self.roster_title_lbl = ctk.CTkLabel(right, text=self.texts["TR"]["roster_panel_title"], font=self.card_title_font, text_color="#FF1493")
+        self.roster_title_lbl = ctk.CTkLabel(right, text=self.texts[self.current_lang]["roster_panel_title"], font=self.card_title_font, text_color="#FF1493")
         self.roster_title_lbl.pack(pady=(25, 10))
 
-        self.roster_info_lbl = ctk.CTkLabel(right, text="Bir oyun seç...", font=ctk.CTkFont(size=18, weight="bold"), text_color=("#121212", "#FFFFFF"), justify="left")
+        self.roster_info_lbl = ctk.CTkLabel(right, text="Bir oyun seç..." if self.current_lang == "TR" else "Select a game...", font=ctk.CTkFont(size=18, weight="bold"), text_color=("#121212", "#FFFFFF"), justify="left")
         self.roster_info_lbl.pack(pady=20, padx=20, anchor="w")
 
         self.player_box = ctk.CTkScrollableFrame(right, fg_color="transparent")
@@ -415,13 +469,13 @@ class App(ctk.CTk):
             b.pack(pady=10, fill="x")
 
     def show_players_panel(self, game):
-        self.roster_info_lbl.configure(text=f"🎮 {game} {self.texts['TR']['roster_title']}")
+        self.roster_info_lbl.configure(text=f"🎮 {game} {self.texts[self.current_lang]['roster_title']}")
         for w in self.player_box.winfo_children():
             w.destroy()
 
         players = self.roster_data.get(game, [])
         if not players:
-            ctk.CTkLabel(self.player_box, text="Oyuncu bulunamadı.", font=self.main_font, text_color="gray").pack(pady=10)
+            ctk.CTkLabel(self.player_box, text="Oyuncu bulunamadı." if self.current_lang == "TR" else "No players found.", font=self.main_font, text_color="gray").pack(pady=10)
             return
 
         for i, player in enumerate(players, start=1):
@@ -431,23 +485,28 @@ class App(ctk.CTk):
 
     def build_scores(self):
         f = self.frames["scores"]
-        ctk.CTkLabel(f, text=self.texts["TR"]["live_scores"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=30)
+        ctk.CTkLabel(f, text=self.texts[self.current_lang]["live_scores"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=30)
 
     def build_watch(self):
         f = self.frames["watch"]
-        ctk.CTkLabel(f, text="Maç İzleme Merkezi", font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=(50, 30))
+        ctk.CTkLabel(
+            f,
+            text="Maç İzleme Merkezi" if self.current_lang == "TR" else "Match Watch Center",
+            font=self.title_font,
+            text_color=("#121212", "#FFFFFF")
+        ).pack(pady=(50, 30))
 
         card = ctk.CTkFrame(f, corner_radius=20, fg_color=("#EEEEEE", "#222222"))
         card.pack(padx=80, pady=20, fill="x")
 
         ctk.CTkButton(
-            card, text=self.texts["TR"]["watch_live"], font=self.btn_font,
+            card, text=self.texts[self.current_lang]["watch_live"], font=self.btn_font,
             height=65, fg_color="#FF1493", hover_color="#FF69B4", corner_radius=14,
             command=lambda: webbrowser.open("https://kick.com/efelvs")
         ).pack(padx=30, pady=(30, 15), fill="x")
 
         ctk.CTkButton(
-            card, text=self.texts["TR"]["watch_history"], font=self.btn_font,
+            card, text=self.texts[self.current_lang]["watch_history"], font=self.btn_font,
             height=65, fg_color=("#333333", "#333333"), hover_color="#444444", corner_radius=14,
             command=lambda: webbrowser.open("https://youtube.com/@efelvs")
         ).pack(padx=30, pady=(0, 30), fill="x")
@@ -461,29 +520,40 @@ class App(ctk.CTk):
         top.pack(fill="x", padx=40, pady=10)
 
         ctk.CTkButton(
-            top, text=self.texts["TR"]["overlay_on"], font=self.btn_font,
+            top, text=self.texts[self.current_lang]["overlay_on"], font=self.btn_font,
             height=55, fg_color="#00AA66", hover_color="#00CC77", corner_radius=14,
             command=self.enable_overlay
         ).pack(side="left", padx=20, pady=20)
 
         ctk.CTkButton(
-            top, text=self.texts["TR"]["overlay_off"], font=self.btn_font,
+            top, text=self.texts[self.current_lang]["overlay_off"], font=self.btn_font,
             height=55, fg_color="#AA2222", hover_color="#CC3333", corner_radius=14,
             command=self.disable_overlay
         ).pack(side="left", padx=10, pady=20)
 
         ctk.CTkButton(
-            top, text=self.texts["TR"]["boost_mc"], font=self.btn_font,
+            top, text=self.texts[self.current_lang]["boost_mc"], font=self.btn_font,
             height=55, fg_color="#3366FF", hover_color="#4A7BFF", corner_radius=14,
             command=self.boost_minecraft
         ).pack(side="left", padx=10, pady=20)
 
     def build_settings(self):
         f = self.frames["settings"]
-        ctk.CTkLabel(f, text=self.texts["TR"]["settings"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=30)
+
+        ctk.CTkLabel(f, text=self.texts[self.current_lang]["settings"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=30)
+
+        ctk.CTkButton(
+            f, text=self.texts[self.current_lang]["theme"], font=self.btn_font, height=45,
+            fg_color=("#EEEEEE", "#2A2A2A"), text_color=("#121212", "#FFFFFF"), command=self.switch_theme
+        ).pack(pady=10)
+
+        ctk.CTkButton(
+            f, text=self.texts[self.current_lang]["lang"], font=self.btn_font, height=45,
+            fg_color=("#EEEEEE", "#2A2A2A"), text_color=("#121212", "#FFFFFF"), command=self.switch_lang
+        ).pack(pady=10)
 
     def run_cheat_scan(self):
-        messagebox.showinfo("Anti-Cheat", self.texts["TR"]["scanning"])
+        messagebox.showinfo("Anti-Cheat", self.texts[self.current_lang]["scanning"])
 
         suspicious_keywords = [
             "wurst", "cheatengine", "vape", "huzuni", "aimbot", "killaura", "injector",
@@ -504,9 +574,9 @@ class App(ctk.CTk):
 
         if found_items:
             preview = "\n".join(found_items[:8])
-            messagebox.showerror("ALARM", f"{self.texts['TR']['found']}\n\n{preview}")
+            messagebox.showerror("ALARM", f"{self.texts[self.current_lang]['found']}\n\n{preview}")
         else:
-            messagebox.showinfo("OK", f"{self.texts['TR']['clean']}\n{self.texts['TR']['scan_done']}")
+            messagebox.showinfo("OK", f"{self.texts[self.current_lang]['clean']}\n{self.texts[self.current_lang]['scan_done']}")
 
     def enable_overlay(self):
         if self.overlay_window is None or not self.overlay_window.winfo_exists():
