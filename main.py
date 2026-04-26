@@ -13,7 +13,7 @@ from pypresence import Presence
 CLIENT_ID = "1497357433645961237"
 WEBHOOK_URL = "https://discord.com/api/webhooks/1497711458362982411/MA1_NY_s0kFLXf0M-lQU_ISoHDtOXyi1HYJPRl_jnXlWic08qxkafwtD0-I8kyuQ8RRd"
 
-APP_VERSION = "1.1"
+APP_VERSION = "1.2"
 VERSION_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/version.txt"
 CODE_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/main.py"
 ROSTER_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/kadro.json"
@@ -35,22 +35,24 @@ class App(ctk.CTk):
         self.current_lang = "TR"
         self.texts = {
             "TR": {
-                "home": "Ana Sayfa", "roster": "Takım Kadrosu", "watch": "Maç İzle",
-                "cheat": "Hile Kontrol", "settings": "Ayarlar", "welcome": "PlayzEsportHub'a Hoş Geldin!",
-                "info": "Kadro takibi yapabilir ve maçları canlı izleyebilirsiniz.",
+                "home": "Ana Sayfa", "roster": "Takım Kadrosu", "scores": "Maç Skorları", "watch": "Maç İzle",
+                "cheat": "Anti-Cheat (Derin Tarama)", "settings": "Ayarlar", "welcome": "PlayzEsportHub'a Hoş Geldin!",
+                "info": "Kadro takibi, skorlar ve canlı yayınlar.",
                 "game_select": "Kadro Seçimi", "roster_title": "Kadrosu",
-                "start_stream": "🔴 EfeLvs Canlı Yayını İzle", "theme": "Tema Değiştir", "lang": "Dil / Language",
+                "live_scores": "Canlı Maç Skorları", "start_stream": "🔴 EfeLvs Canlı İzle",
+                "theme": "Tema Değiştir", "lang": "Dil / Language",
                 "cheat_warn": "Tarama için oyunun açık olması lazım!", "clean": "Sistem Temiz!",
-                "found": "Zararlı işlem bulundu:", "scanning": "Derin tarama yapılıyor..."
+                "found": "Zararlı işlem bulundu:", "scanning": "Derin tarama yapılıyor, lütfen bekleyin..."
             },
             "EN": {
-                "home": "Home", "roster": "Roster", "watch": "Watch Match",
-                "cheat": "Anti-Cheat", "settings": "Settings", "welcome": "Welcome to PlayzEsportHub!",
-                "info": "Check rosters and watch matches directly.",
+                "home": "Home", "roster": "Roster", "scores": "Match Scores", "watch": "Watch Match",
+                "cheat": "Anti-Cheat (Deep Scan)", "settings": "Settings", "welcome": "Welcome to PlayzEsportHub!",
+                "info": "Manage rosters, scores and live streams.",
                 "game_select": "Select Roster", "roster_title": "Roster",
-                "start_stream": "🔴 Watch EfeLvs Live", "theme": "Switch Theme", "lang": "Language / Dil",
+                "live_scores": "Live Match Scores", "start_stream": "🔴 Watch EfeLvs Live",
+                "theme": "Switch Theme", "lang": "Language / Dil",
                 "cheat_warn": "Game must be running for scan!", "clean": "System Clean!",
-                "found": "Suspicious process found:", "scanning": "Deep scanning..."
+                "found": "Suspicious process found:", "scanning": "Deep scanning, please wait..."
             }
         }
         
@@ -58,7 +60,7 @@ class App(ctk.CTk):
             "Valorant": ["EfeLvs", "Talha"], 
             "Brawl Stars": ["Oyuncu 1"],
             "eFootball": ["Talha", "EfeLvs"], 
-            "Roblox": ["EfeLvs"], 
+            "Roblox": ["EfeLvs", "Oyuncu 2"], 
             "Minecraft": ["Wurst Hunter"]
         }
         
@@ -104,7 +106,7 @@ class App(ctk.CTk):
         while True:
             try:
                 for proc in psutil.process_iter(['name']):
-                    if proc.info['name'].lower() in ["javaw.exe", "valorant.exe", "minecraft.exe"]:
+                    if proc.info['name'].lower() in ["javaw.exe", "valorant.exe", "minecraft.exe", "robloxplayerbeta.exe"]:
                         requests.post(WEBHOOK_URL, json={"content": f"🎮 Kullanıcı şu an {proc.info['name']} oynuyor!"})
                         return
             except: pass
@@ -116,7 +118,7 @@ class App(ctk.CTk):
 
         self.nav_frame = ctk.CTkFrame(self, corner_radius=0, fg_color=("#F5F5F5", "#121212"))
         self.nav_frame.grid(row=0, column=0, sticky="nsew")
-        self.nav_frame.grid_rowconfigure(7, weight=1)
+        self.nav_frame.grid_rowconfigure(8, weight=1)
 
         self.logo_label = ctk.CTkLabel(self.nav_frame, text="PlayzEsport", font=self.title_font, text_color="#FF1493")
         self.logo_label.grid(row=0, column=0, padx=25, pady=(35, 45))
@@ -127,20 +129,23 @@ class App(ctk.CTk):
         self.btn_team = self.create_nav_btn("roster", self.show_roster)
         self.btn_team.grid(row=2, column=0, padx=15, pady=8, sticky="ew")
 
+        self.btn_scores = self.create_nav_btn("scores", self.show_scores)
+        self.btn_scores.grid(row=3, column=0, padx=15, pady=8, sticky="ew")
+
         self.btn_kick = self.create_nav_btn("watch", self.show_kick)
-        self.btn_kick.grid(row=3, column=0, padx=15, pady=8, sticky="ew")
+        self.btn_kick.grid(row=4, column=0, padx=15, pady=8, sticky="ew")
 
         self.btn_cheat = self.create_nav_btn("cheat", self.run_cheat_scan, fg_color="#A81010", hover_color="#E51A1A")
-        self.btn_cheat.grid(row=5, column=0, padx=15, pady=(40, 8), sticky="ew")
+        self.btn_cheat.grid(row=6, column=0, padx=15, pady=(40, 8), sticky="ew")
 
         self.btn_settings = self.create_nav_btn("settings", self.show_settings, fg_color="transparent", border=2)
-        self.btn_settings.grid(row=6, column=0, padx=15, pady=8, sticky="ew")
+        self.btn_settings.grid(row=7, column=0, padx=15, pady=8, sticky="ew")
 
         self.main_frame = ctk.CTkFrame(self, fg_color=("#FFFFFF", "#1E1E1E"), corner_radius=20)
         self.main_frame.grid(row=0, column=1, padx=25, pady=25, sticky="nsew")
 
         self.frames = {}
-        for F in ("home", "roster", "kick", "settings"):
+        for F in ("home", "roster", "scores", "kick", "settings"):
             self.frames[F] = ctk.CTkFrame(self.main_frame, fg_color="transparent")
             self.frames[F].grid(row=0, column=0, sticky="nsew")
 
@@ -162,6 +167,7 @@ class App(ctk.CTk):
         
         self.build_home()
         self.build_roster()
+        self.build_scores()
         self.build_kick()
         self.build_settings()
 
@@ -171,6 +177,7 @@ class App(ctk.CTk):
 
     def show_home(self): self.show_frame("home")
     def show_roster(self): self.show_frame("roster")
+    def show_scores(self): self.show_frame("scores")
     def show_kick(self): self.show_frame("kick")
     def show_settings(self): self.show_frame("settings")
 
@@ -194,6 +201,13 @@ class App(ctk.CTk):
     def show_players(self, g):
         self.p_lbl.configure(text=f"━ {g} {self.texts[self.current_lang]['roster_title']} ━\n\n" + "\n".join(self.roster_data[g]))
 
+    def build_scores(self):
+        f = self.frames["scores"]
+        ctk.CTkLabel(f, text=self.texts[self.current_lang]["live_scores"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=30)
+        box = ctk.CTkFrame(f, fg_color=("#EEEEEE", "#2A2A2A"), corner_radius=15)
+        box.pack(padx=50, fill="x", pady=20)
+        ctk.CTkLabel(box, text="Buraya manuel skor girişi yapabilirsin", font=self.main_font, text_color="gray").pack(pady=20)
+
     def build_kick(self):
         f = self.frames["kick"]
         ctk.CTkButton(f, text=self.texts[self.current_lang]["start_stream"], font=self.btn_font, height=60, fg_color="#FF1493", command=lambda: webbrowser.open("https://kick.com/efelvs")).pack(pady=100)
@@ -211,6 +225,7 @@ class App(ctk.CTk):
         self.current_lang = "EN" if self.current_lang == "TR" else "TR"
         self.btn_home.configure(text=self.texts[self.current_lang]["home"])
         self.btn_team.configure(text=self.texts[self.current_lang]["roster"])
+        self.btn_scores.configure(text=self.texts[self.current_lang]["scores"])
         self.btn_kick.configure(text=self.texts[self.current_lang]["watch"])
         self.btn_cheat.configure(text=self.texts[self.current_lang]["cheat"])
         self.btn_settings.configure(text=self.texts[self.current_lang]["settings"])
@@ -218,10 +233,11 @@ class App(ctk.CTk):
 
     def run_cheat_scan(self):
         messagebox.showinfo("Anti-Cheat", self.texts[self.current_lang]["scanning"])
-        sigs = ["wurst", "cheatengine", "vape", "huzuni", "aimbot", "killaura", "metin2mod", "injector"]
+        sigs = ["wurst", "cheatengine", "vape", "huzuni", "aimbot", "killaura", "metin2mod", "injector", "processhacker", "xenos", "dllinjector", "extremeinjector"]
         found = False
         try:
             for p in psutil.process_iter(['name', 'exe']):
+                time.sleep(0.01)
                 n = p.info['name'].lower()
                 path = (p.info['exe'] or "").lower()
                 if any(s in n or s in path for s in sigs):
