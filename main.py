@@ -1,7 +1,6 @@
 import sys
 import os
 import time
-import json
 import requests
 import psutil
 import threading
@@ -14,7 +13,7 @@ from pypresence import Presence
 CLIENT_ID = "1497357433645961237"
 WEBHOOK_URL = "https://discord.com/api/webhooks/1497711458362982411/MA1_NY_s0kFLXf0M-lQU_ISoHDtOXyi1HYJPRl_jnXlWic08qxkafwtD0-I8kyuQ8RRd"
 
-APP_VERSION = "1.4"
+APP_VERSION = "1.5"
 VERSION_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/version.txt"
 CODE_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/main.py"
 ROSTER_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/kadro.json"
@@ -58,8 +57,7 @@ class App(ctk.CTk):
                 "watch_live": "🔴 Canlı Maç İzle",
                 "watch_history": "📺 Maç Geçmişini İzle",
                 "roster_panel_title": "Oyuncu Paneli",
-                "scan_done": "Tarama tamamlandı!",
-                "no_select": "Önce bir oyun seç!"
+                "scan_done": "Tarama tamamlandı!"
             },
             "EN": {
                 "home": "Home",
@@ -81,8 +79,7 @@ class App(ctk.CTk):
                 "watch_live": "🔴 Watch Live Match",
                 "watch_history": "📺 Watch Match History",
                 "roster_panel_title": "Player Panel",
-                "scan_done": "Scan completed!",
-                "no_select": "Select a game first!"
+                "scan_done": "Scan completed!"
             }
         }
 
@@ -91,7 +88,7 @@ class App(ctk.CTk):
             "Valorant": ["EfeLvs", "Talha"],
             "eFootball": ["Talha", "EfeLvs"],
             "Brawl Stars": ["Oyuncu 1"],
-            "Minecraft": ["Wurst Hunter"]
+            "Minecraft": ["Cloopzy", "EfeLvs"]
         }
 
         self.selected_game = None
@@ -108,16 +105,27 @@ class App(ctk.CTk):
             resp = requests.get(f"{VERSION_URL}?t={time.time()}", timeout=5)
             if resp.status_code == 200:
                 remote_v = resp.text.strip()
+                print("Local:", APP_VERSION, "| Remote:", remote_v)
+
                 if remote_v != APP_VERSION:
                     code_resp = requests.get(f"{CODE_URL}?t={time.time()}", timeout=10)
                     if code_resp.status_code == 200:
                         file_path = os.path.abspath(sys.argv[0])
+
                         with open(file_path, 'w', encoding='utf-8') as f:
                             f.write(code_resp.text)
+
+                        messagebox.showinfo("Güncelleme", f"Yeni sürüm bulundu! ({remote_v}) Uygulama yeniden başlatılıyor.")
                         subprocess.Popen([sys.executable, file_path])
                         os._exit(0)
-        except:
-            pass
+                    else:
+                        print("Kod indirilemedi:", code_resp.status_code)
+                else:
+                    print("Zaten güncel.")
+            else:
+                print("Version çekilemedi:", resp.status_code)
+        except Exception as e:
+            print("Update hatası:", e)
 
     # ---------------- REMOTE ROSTER ----------------
     def fetch_remote_roster(self):
@@ -420,7 +428,7 @@ class App(ctk.CTk):
             fg_color=("#333333", "#333333"),
             hover_color="#444444",
             corner_radius=14,
-            command=lambda: webbrowser.open("https://www.youtube.com/")
+            command=lambda: webbrowser.open("https://youtube.com/@efelvs")
         ).pack(padx=30, pady=(0, 30), fill="x")
 
     # ---------------- SETTINGS ----------------
@@ -536,7 +544,7 @@ class App(ctk.CTk):
             except:
                 pass
 
-        # 3) STARTUP / AUTORUN BENZERİ BASİT KONTROL
+        # 3) STARTUP BASİT KONTROL
         try:
             startup_folder = os.path.join(
                 os.getenv("APPDATA", ""),
