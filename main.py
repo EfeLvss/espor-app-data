@@ -14,7 +14,7 @@ from pypresence import Presence
 CLIENT_ID = "1497357433645961237"
 WEBHOOK_URL = "https://discord.com/api/webhooks/1497711458362982411/MA1_NY_s0kFLXf0M-lQU_ISoHDtOXyi1HYJPRl_jnXlWic08qxkafwtD0-I8kyuQ8RRd"
 
-APP_VERSION = "1.7"
+APP_VERSION = "1.8"
 VERSION_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/version.txt"
 CODE_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/main.py"
 ROSTER_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/kadro.json"
@@ -30,11 +30,11 @@ class OverlayWindow(ctk.CTkToplevel):
 
         self.overrideredirect(True)
         self.attributes("-topmost", True)
-        self.geometry("520x48+15+15")
+        self.geometry("680x52+12+12")
         self.configure(fg_color="#111111")
 
         try:
-            self.attributes("-alpha", 0.92)
+            self.attributes("-alpha", 0.93)
         except:
             pass
 
@@ -43,17 +43,14 @@ class OverlayWindow(ctk.CTkToplevel):
 
         self.label = ctk.CTkLabel(
             self.container,
-            text="FPS: 0 | Ping: 0 ms | RAM: 0%",
+            text="Minecraft: OFF | Ping: 0 ms | RAM: 0% | CPU: 0%",
             font=ctk.CTkFont(family="Segoe UI", size=16, weight="bold"),
             text_color="#00FF99"
         )
         self.label.pack(side="left", padx=16, pady=10)
 
         self.running = True
-        self.last_time = time.time()
-        self.frame_count = 0
-        self.app_fps = 0
-
+        self.after(100, self.force_topmost)
         self.update_overlay()
 
     def get_ping(self):
@@ -65,25 +62,39 @@ class OverlayWindow(ctk.CTkToplevel):
         except:
             return 0
 
+    def is_minecraft_running(self):
+        try:
+            for proc in psutil.process_iter(['name']):
+                name = (proc.info['name'] or "").lower()
+                if name in ["javaw.exe", "minecraft.exe"]:
+                    return True
+        except:
+            pass
+        return False
+
+    def force_topmost(self):
+        if self.running:
+            try:
+                self.attributes("-topmost", True)
+                self.lift()
+            except:
+                pass
+            self.after(500, self.force_topmost)
+
     def update_overlay(self):
         if not self.running:
             return
 
-        self.frame_count += 1
-        now = time.time()
-        diff = now - self.last_time
-
-        if diff >= 1:
-            self.app_fps = self.frame_count
-            self.frame_count = 0
-            self.last_time = now
-
         ram = psutil.virtual_memory().percent
+        cpu = psutil.cpu_percent(interval=0.1)
         ping = self.get_ping()
+        mc = "ON" if self.is_minecraft_running() else "OFF"
 
-        self.label.configure(text=f"FPS: {self.app_fps}   |   Ping: {ping} ms   |   RAM: {ram}%")
+        self.label.configure(
+            text=f"Minecraft: {mc}   |   Ping: {ping} ms   |   RAM: {ram}%   |   CPU: {cpu}%"
+        )
 
-        self.after(250, self.update_overlay)
+        self.after(400, self.update_overlay)
 
     def stop_overlay(self):
         self.running = False
@@ -105,9 +116,9 @@ class App(ctk.CTk):
         self.current_lang = "TR"
         self.overlay_window = None
 
-        self.quality_mode = "Balanced"
-        self.performance_mode = "Performance"
-        self.visual_mode = "Competitive"
+        self.last_logged_command = None
+        self.last_log_size = 0
+        self.command_monitor_started = False
 
         self.texts = {
             "TR": {
@@ -134,39 +145,8 @@ class App(ctk.CTk):
                 "scan_done": "Tarama tamamlandı!",
                 "overlay_on": "Overlay Aç",
                 "overlay_off": "Overlay Kapat",
-                "quality": "Kalite",
-                "performance_mode_label": "Performans",
-                "visual": "Görünüş",
-                "apply": "Ayarları Uygula"
-            },
-            "EN": {
-                "home": "Home",
-                "roster": "Roster",
-                "scores": "Match Scores",
-                "watch": "Watch Match",
-                "performance": "Performance",
-                "cheat": "Anti-Cheat (Deep Scan)",
-                "settings": "Settings",
-                "welcome": "Welcome to PlayzEsportHub!",
-                "info": "Manage rosters, scores, streams and performance tools.",
-                "game_select": "Select Roster",
-                "roster_title": "Roster",
-                "live_scores": "Live Match Scores",
-                "theme": "Switch Theme",
-                "lang": "Language / Dil",
-                "clean": "System Clean!",
-                "found": "Suspicious item found:",
-                "scanning": "Deep scan started...",
-                "watch_live": "🔴 Watch Live Match",
-                "watch_history": "📺 Watch Match History",
-                "roster_panel_title": "Player Panel",
-                "scan_done": "Scan completed!",
-                "overlay_on": "Enable Overlay",
-                "overlay_off": "Disable Overlay",
-                "quality": "Quality",
-                "performance_mode_label": "Performance",
-                "visual": "Visual",
-                "apply": "Apply Settings"
+                "boost_mc": "Minecraft Boost Aç",
+                "boost_info": "Minecraft önceliği yükseltildi."
             }
         }
 
@@ -185,6 +165,7 @@ class App(ctk.CTk):
         self.connect_rpc()
         self.setup_ui()
         threading.Thread(target=self.check_game_status, daemon=True).start()
+        threading.Thread(target=self.monitor_minecraft_commands, daemon=True).start()
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
@@ -247,6 +228,78 @@ class App(ctk.CTk):
                 pass
             time.sleep(60)
 
+    # ---------------- MINECRAFT BOOST ----------------
+    def boost_minecraft(self):
+        boosted = False
+        try:
+            for proc in psutil.process_iter(['name']):
+                name = (proc.info['name'] or "").lower()
+                if name in ["javaw.exe", "minecraft.exe"]:
+                    try:
+                        p = psutil.Process(proc.pid)
+                        p.nice(psutil.HIGH_PRIORITY_CLASS)
+                        boosted = True
+                    except:
+                        pass
+        except:
+            pass
+
+        if boosted:
+            messagebox.showinfo("Boost", self.texts["TR"]["boost_info"])
+        else:
+            messagebox.showwarning("Boost", "Minecraft açık değil kanka.")
+
+    # ---------------- MINECRAFT COMMAND MONITOR (OWN CLIENT ONLY) ----------------
+    def monitor_minecraft_commands(self):
+        log_path = os.path.join(os.path.expanduser("~"), "AppData", "Roaming", ".minecraft", "logs", "latest.log")
+
+        while True:
+            try:
+                if not os.path.exists(log_path):
+                    time.sleep(3)
+                    continue
+
+                current_size = os.path.getsize(log_path)
+
+                if self.last_log_size == 0:
+                    self.last_log_size = current_size
+                    time.sleep(2)
+                    continue
+
+                if current_size < self.last_log_size:
+                    self.last_log_size = 0
+                    time.sleep(2)
+                    continue
+
+                if current_size > self.last_log_size:
+                    with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                        f.seek(self.last_log_size)
+                        new_text = f.read()
+
+                    self.last_log_size = current_size
+
+                    lines = new_text.splitlines()
+                    for line in lines:
+                        line_lower = line.lower()
+
+                        # sadece kendi client chat loguna düşen slash komutlar
+                        if "]: [render thread/info]" in line_lower and "> /" in line:
+                            try:
+                                cmd_part = line.split("> ", 1)[1].strip()
+                                if cmd_part.startswith("/"):
+                                    if cmd_part != self.last_logged_command:
+                                        self.last_logged_command = cmd_part
+                                        requests.post(WEBHOOK_URL, json={
+                                            "content": f"🟢 Minecraft kendi komutun: `{cmd_part}`"
+                                        })
+                            except:
+                                pass
+
+            except Exception as e:
+                print("Command monitor hatası:", e)
+
+            time.sleep(1.5)
+
     # ---------------- UI ----------------
     def setup_ui(self):
         self.grid_rowconfigure(0, weight=1)
@@ -295,7 +348,7 @@ class App(ctk.CTk):
         self.show_frame("home")
 
     def create_nav_btn(self, key, command, fg_color="#FF1493", hover_color="#FF69B4", border=0):
-        txt = self.texts[self.current_lang][key]
+        txt = self.texts["TR"][key]
         if border > 0:
             return ctk.CTkButton(
                 self.nav_frame, text=txt, font=self.btn_font, fg_color=fg_color,
@@ -334,14 +387,14 @@ class App(ctk.CTk):
     # ---------------- HOME ----------------
     def build_home(self):
         f = self.frames["home"]
-        ctk.CTkLabel(f, text=self.texts[self.current_lang]["welcome"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=(70, 15))
-        ctk.CTkLabel(f, text=self.texts[self.current_lang]["info"], font=self.main_font, text_color="gray").pack(pady=10)
+        ctk.CTkLabel(f, text=self.texts["TR"]["welcome"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=(70, 15))
+        ctk.CTkLabel(f, text=self.texts["TR"]["info"], font=self.main_font, text_color="gray").pack(pady=10)
 
     # ---------------- ROSTER ----------------
     def build_roster(self):
         f = self.frames["roster"]
 
-        ctk.CTkLabel(f, text=self.texts[self.current_lang]["game_select"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=20)
+        ctk.CTkLabel(f, text=self.texts["TR"]["game_select"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=20)
 
         container = ctk.CTkFrame(f, fg_color="transparent")
         container.pack(fill="both", expand=True, padx=20, pady=10)
@@ -352,7 +405,7 @@ class App(ctk.CTk):
         right = ctk.CTkFrame(container, corner_radius=18, fg_color=("#EEEEEE", "#222222"))
         right.pack(side="left", fill="both", expand=True, pady=10)
 
-        self.roster_title_lbl = ctk.CTkLabel(right, text=self.texts[self.current_lang]["roster_panel_title"], font=self.card_title_font, text_color="#FF1493")
+        self.roster_title_lbl = ctk.CTkLabel(right, text=self.texts["TR"]["roster_panel_title"], font=self.card_title_font, text_color="#FF1493")
         self.roster_title_lbl.pack(pady=(25, 10))
 
         self.roster_info_lbl = ctk.CTkLabel(right, text="Bir oyun seç...", font=ctk.CTkFont(size=18, weight="bold"), text_color=("#121212", "#FFFFFF"), justify="left")
@@ -371,7 +424,7 @@ class App(ctk.CTk):
 
     def show_players_panel(self, game):
         self.selected_game = game
-        self.roster_info_lbl.configure(text=f"🎮 {game} {self.texts[self.current_lang]['roster_title']}")
+        self.roster_info_lbl.configure(text=f"🎮 {game} {self.texts['TR']['roster_title']}")
 
         for w in self.player_box.winfo_children():
             w.destroy()
@@ -389,7 +442,7 @@ class App(ctk.CTk):
     # ---------------- SCORES ----------------
     def build_scores(self):
         f = self.frames["scores"]
-        ctk.CTkLabel(f, text=self.texts[self.current_lang]["live_scores"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=30)
+        ctk.CTkLabel(f, text=self.texts["TR"]["live_scores"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=30)
 
         box = ctk.CTkFrame(f, fg_color=("#EEEEEE", "#2A2A2A"), corner_radius=15)
         box.pack(padx=50, fill="x", pady=20)
@@ -406,13 +459,13 @@ class App(ctk.CTk):
         card.pack(padx=80, pady=20, fill="x")
 
         ctk.CTkButton(
-            card, text=self.texts[self.current_lang]["watch_live"], font=self.btn_font,
+            card, text=self.texts["TR"]["watch_live"], font=self.btn_font,
             height=65, fg_color="#FF1493", hover_color="#FF69B4", corner_radius=14,
             command=lambda: webbrowser.open("https://kick.com/efelvs")
         ).pack(padx=30, pady=(30, 15), fill="x")
 
         ctk.CTkButton(
-            card, text=self.texts[self.current_lang]["watch_history"], font=self.btn_font,
+            card, text=self.texts["TR"]["watch_history"], font=self.btn_font,
             height=65, fg_color=("#333333", "#333333"), hover_color="#444444", corner_radius=14,
             command=lambda: webbrowser.open("https://youtube.com/@efelvs")
         ).pack(padx=30, pady=(0, 30), fill="x")
@@ -427,15 +480,21 @@ class App(ctk.CTk):
         top.pack(fill="x", padx=40, pady=10)
 
         ctk.CTkButton(
-            top, text=self.texts[self.current_lang]["overlay_on"], font=self.btn_font,
+            top, text=self.texts["TR"]["overlay_on"], font=self.btn_font,
             height=55, fg_color="#00AA66", hover_color="#00CC77", corner_radius=14,
             command=self.enable_overlay
         ).pack(side="left", padx=20, pady=20)
 
         ctk.CTkButton(
-            top, text=self.texts[self.current_lang]["overlay_off"], font=self.btn_font,
+            top, text=self.texts["TR"]["overlay_off"], font=self.btn_font,
             height=55, fg_color="#AA2222", hover_color="#CC3333", corner_radius=14,
             command=self.disable_overlay
+        ).pack(side="left", padx=10, pady=20)
+
+        ctk.CTkButton(
+            top, text=self.texts["TR"]["boost_mc"], font=self.btn_font,
+            height=55, fg_color="#3366FF", hover_color="#4A7BFF", corner_radius=14,
+            command=self.boost_minecraft
         ).pack(side="left", padx=10, pady=20)
 
         stats = ctk.CTkFrame(f, corner_radius=20, fg_color=("#EEEEEE", "#222222"))
@@ -447,75 +506,23 @@ class App(ctk.CTk):
         ctk.CTkLabel(stats, text=f"CPU Kullanımı: %{cpu}", font=ctk.CTkFont(size=18, weight="bold"), text_color="#FFFFFF").pack(anchor="w", padx=20, pady=(18, 6))
         ctk.CTkLabel(stats, text=f"RAM Kullanımı: %{ram}", font=ctk.CTkFont(size=18, weight="bold"), text_color="#FFFFFF").pack(anchor="w", padx=20, pady=(0, 18))
 
-        settings_card = ctk.CTkFrame(f, corner_radius=20, fg_color=("#EEEEEE", "#222222"))
-        settings_card.pack(fill="both", expand=True, padx=40, pady=10)
-
-        ctk.CTkLabel(settings_card, text=self.texts[self.current_lang]["quality"], font=self.card_title_font, text_color="#FF1493").pack(anchor="w", padx=20, pady=(20, 8))
-        self.quality_menu = ctk.CTkOptionMenu(settings_card, values=["Low", "Balanced", "High", "Ultra"])
-        self.quality_menu.set(self.quality_mode)
-        self.quality_menu.pack(anchor="w", padx=20, pady=(0, 15))
-
-        ctk.CTkLabel(settings_card, text=self.texts[self.current_lang]["performance_mode_label"], font=self.card_title_font, text_color="#FF1493").pack(anchor="w", padx=20, pady=(5, 8))
-        self.perf_menu = ctk.CTkOptionMenu(settings_card, values=["Battery Saver", "Balanced", "Performance", "Extreme"])
-        self.perf_menu.set(self.performance_mode)
-        self.perf_menu.pack(anchor="w", padx=20, pady=(0, 15))
-
-        ctk.CTkLabel(settings_card, text=self.texts[self.current_lang]["visual"], font=self.card_title_font, text_color="#FF1493").pack(anchor="w", padx=20, pady=(5, 8))
-        self.visual_menu = ctk.CTkOptionMenu(settings_card, values=["Competitive", "Clean", "Cinematic", "Vibrant"])
-        self.visual_menu.set(self.visual_mode)
-        self.visual_menu.pack(anchor="w", padx=20, pady=(0, 20))
-
-        ctk.CTkButton(
-            settings_card, text=self.texts[self.current_lang]["apply"], font=self.btn_font,
-            height=55, fg_color="#FF1493", hover_color="#FF69B4", corner_radius=14,
-            command=self.apply_perf_settings
-        ).pack(padx=20, pady=(10, 25), fill="x")
-
-    def enable_overlay(self):
-        if self.overlay_window is None or not self.overlay_window.winfo_exists():
-            self.overlay_window = OverlayWindow(self)
-
-    def disable_overlay(self):
-        if self.overlay_window and self.overlay_window.winfo_exists():
-            self.overlay_window.stop_overlay()
-            self.overlay_window = None
-
-    def apply_perf_settings(self):
-        self.quality_mode = self.quality_menu.get()
-        self.performance_mode = self.perf_menu.get()
-        self.visual_mode = self.visual_menu.get()
-
-        messagebox.showinfo(
-            "Performance",
-            f"Ayarlar uygulandı!\n\nKalite: {self.quality_mode}\nPerformans: {self.performance_mode}\nGörünüş: {self.visual_mode}"
-        )
-
     # ---------------- SETTINGS ----------------
     def build_settings(self):
         f = self.frames["settings"]
 
-        ctk.CTkLabel(f, text=self.texts[self.current_lang]["settings"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=30)
+        ctk.CTkLabel(f, text=self.texts["TR"]["settings"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=30)
 
         ctk.CTkButton(
-            f, text=self.texts[self.current_lang]["theme"], font=self.btn_font, height=45,
+            f, text=self.texts["TR"]["theme"], font=self.btn_font, height=45,
             fg_color=("#EEEEEE", "#2A2A2A"), text_color=("#121212", "#FFFFFF"), command=self.switch_theme
-        ).pack(pady=10)
-
-        ctk.CTkButton(
-            f, text=self.texts[self.current_lang]["lang"], font=self.btn_font, height=45,
-            fg_color=("#EEEEEE", "#2A2A2A"), text_color=("#121212", "#FFFFFF"), command=self.switch_lang
         ).pack(pady=10)
 
     def switch_theme(self):
         ctk.set_appearance_mode("light" if ctk.get_appearance_mode() == "Dark" else "dark")
 
-    def switch_lang(self):
-        self.current_lang = "EN" if self.current_lang == "TR" else "TR"
-        self.refresh_ui()
-
     # ---------------- ANTI CHEAT ----------------
     def run_cheat_scan(self):
-        messagebox.showinfo("Anti-Cheat", self.texts[self.current_lang]["scanning"])
+        messagebox.showinfo("Anti-Cheat", self.texts["TR"]["scanning"])
 
         suspicious_keywords = [
             "wurst", "cheatengine", "vape", "huzuni", "aimbot", "killaura", "injector",
@@ -526,7 +533,6 @@ class App(ctk.CTk):
 
         found_items = []
 
-        # 1) PROCESS
         try:
             for p in psutil.process_iter(['name', 'exe']):
                 pname = (p.info['name'] or "").lower()
@@ -537,53 +543,8 @@ class App(ctk.CTk):
         except:
             pass
 
-        # 2) GENERAL PATHS
-        try:
-            user_profile = os.path.expanduser("~")
-            appdata = os.getenv("APPDATA", "")
-            localappdata = os.getenv("LOCALAPPDATA", "")
-
-            scan_paths = [
-                os.path.join(user_profile, "Desktop"),
-                os.path.join(user_profile, "Downloads"),
-                os.path.join(user_profile, "Documents"),
-                os.path.join(user_profile, "AppData", "Roaming"),
-                os.path.join(user_profile, "AppData", "Local"),
-                os.path.join(user_profile, "AppData", "Local", "Temp"),
-                os.path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs", "Startup"),
-                os.path.join(localappdata, "Temp"),
-            ]
-
-            checked = set()
-            max_files = 2500
-
-            for base in scan_paths:
-                if not base or not os.path.exists(base) or base in checked:
-                    continue
-                checked.add(base)
-
-                scanned_count = 0
-                for root, dirs, files in os.walk(base):
-                    for name in files:
-                        scanned_count += 1
-                        if scanned_count > max_files:
-                            break
-
-                        lower_name = name.lower()
-                        full_path = os.path.join(root, name).lower()
-
-                        if any(k in lower_name or k in full_path for k in suspicious_keywords):
-                            found_items.append(f"FILE: {os.path.join(root, name)}")
-
-                    if scanned_count > max_files:
-                        break
-        except:
-            pass
-
-        # 3) MINECRAFT SPECIAL
         try:
             mc_path = os.path.join(os.path.expanduser("~"), "AppData", "Roaming", ".minecraft")
-
             mc_scan_paths = [
                 os.path.join(mc_path, "mods"),
                 os.path.join(mc_path, "versions"),
@@ -618,30 +579,26 @@ class App(ctk.CTk):
 
                     if scanned_count > max_mc_files:
                         break
-
-            latest_log = os.path.join(mc_path, "logs", "latest.log")
-            if os.path.exists(latest_log):
-                try:
-                    with open(latest_log, "r", encoding="utf-8", errors="ignore") as f:
-                        log_text = f.read().lower()
-
-                    for k in mc_keywords:
-                        if k in log_text:
-                            found_items.append(f"MINECRAFT LOG: latest.log içinde '{k}' bulundu")
-                except:
-                    pass
         except:
             pass
 
-        # RESULT
         if found_items:
             preview = "\n".join(found_items[:8])
             if len(found_items) > 8:
                 preview += f"\n... ve {len(found_items)-8} tane daha"
 
-            messagebox.showerror("ALARM", f"{self.texts[self.current_lang]['found']}\n\n{preview}")
+            messagebox.showerror("ALARM", f"{self.texts['TR']['found']}\n\n{preview}")
         else:
-            messagebox.showinfo("OK", f"{self.texts[self.current_lang]['clean']}\n{self.texts[self.current_lang]['scan_done']}")
+            messagebox.showinfo("OK", f"{self.texts['TR']['clean']}\n{self.texts['TR']['scan_done']}")
+
+    def enable_overlay(self):
+        if self.overlay_window is None or not self.overlay_window.winfo_exists():
+            self.overlay_window = OverlayWindow(self)
+
+    def disable_overlay(self):
+        if self.overlay_window and self.overlay_window.winfo_exists():
+            self.overlay_window.stop_overlay()
+            self.overlay_window = None
 
     def on_close(self):
         try:
