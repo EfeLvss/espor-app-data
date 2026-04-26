@@ -112,43 +112,31 @@ class App(ctk.CTk):
     def setup_ui(self):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
-
         self.nav_frame = ctk.CTkFrame(self, corner_radius=0, fg_color=("#F5F5F5", "#121212"))
         self.nav_frame.grid(row=0, column=0, sticky="nsew")
         self.nav_frame.grid_rowconfigure(8, weight=1)
-
         self.logo_label = ctk.CTkLabel(self.nav_frame, text="PlayzEsport", font=self.title_font, text_color="#FF1493")
         self.logo_label.grid(row=0, column=0, padx=25, pady=(35, 45))
-
         self.btn_home = self.create_nav_btn("home", self.show_home)
         self.btn_home.grid(row=1, column=0, padx=15, pady=8, sticky="ew")
-
         self.btn_team = self.create_nav_btn("roster", self.show_roster)
         self.btn_team.grid(row=2, column=0, padx=15, pady=8, sticky="ew")
-
         self.btn_scores = self.create_nav_btn("scores", self.show_scores)
         self.btn_scores.grid(row=3, column=0, padx=15, pady=8, sticky="ew")
-
         self.btn_kick = self.create_nav_btn("watch", self.show_kick)
         self.btn_kick.grid(row=4, column=0, padx=15, pady=8, sticky="ew")
-
         self.btn_cheat = self.create_nav_btn("cheat", self.run_cheat_scan, fg_color="#A81010", hover_color="#E51A1A")
         self.btn_cheat.grid(row=6, column=0, padx=15, pady=(40, 8), sticky="ew")
-
         self.btn_settings = self.create_nav_btn("settings", self.show_settings, fg_color="transparent", border=2)
         self.btn_settings.grid(row=7, column=0, padx=15, pady=8, sticky="ew")
-
         self.main_frame = ctk.CTkFrame(self, fg_color=("#FFFFFF", "#1E1E1E"), corner_radius=20)
         self.main_frame.grid(row=0, column=1, padx=25, pady=25, sticky="nsew")
-
         self.frames = {}
         for F in ("home", "roster", "scores", "kick", "settings"):
             self.frames[F] = ctk.CTkFrame(self.main_frame, fg_color="transparent")
             self.frames[F].grid(row=0, column=0, sticky="nsew")
-
         self.main_frame.grid_rowconfigure(0, weight=1)
         self.main_frame.grid_columnconfigure(0, weight=1)
-
         self.refresh_ui()
         self.show_frame("home")
 
@@ -223,7 +211,8 @@ class App(ctk.CTk):
             for p in psutil.process_iter(['name', 'exe']):
                 time.sleep(0.01)
                 n = p.info['name'].lower()
-                if any(s in n for s in sigs):
+                path = (p.info['exe'] or "").lower()
+                if any(s in n or s in path for s in sigs):
                     messagebox.showerror("ALARM", f"{self.texts[self.current_lang]['found']} {n}")
                     found = True; break
         except: pass
