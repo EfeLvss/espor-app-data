@@ -27,11 +27,11 @@ class App(ctk.CTk):
         self.title("PlayzEsportHub")
         self.geometry("1150x750")
         self.resizable(False, False)
-        
+
         self.main_font = ctk.CTkFont(family="Segoe UI", size=14)
         self.title_font = ctk.CTkFont(family="Segoe UI", size=28, weight="bold")
         self.btn_font = ctk.CTkFont(family="Segoe UI", size=15, weight="bold")
-        
+
         self.current_lang = "TR"
         self.texts = {
             "TR": {
@@ -55,15 +55,16 @@ class App(ctk.CTk):
                 "found": "Suspicious process found:", "scanning": "Deep scanning..."
             }
         }
-        
+
+        # ROBLOX BURAYA EKLENDİ
         self.roster_data = {
-            "Valorant": ["EfeLvs", "Talha"], 
+            "Valorant": ["EfeLvs", "Talha"],
+            "eFootball": ["Talha", "EfeLvs"],
             "Brawl Stars": ["Oyuncu 1"],
-            "eFootball": ["Talha", "EfeLvs"], 
-            "Roblox": ["EfeLvs", "Oyuncu 2"], 
-            "Minecraft": ["Wurst Hunter"]
+            "Minecraft": ["Wurst Hunter"],
+            "Roblox": ["EfeLvs", "Oyuncu 2"]
         }
-        
+
         self.auto_update()
         self.fetch_remote_roster()
         self.connect_rpc()
@@ -83,121 +84,259 @@ class App(ctk.CTk):
                             f.write(code_resp.text)
                         subprocess.Popen([sys.executable, file_path])
                         os._exit(0)
-        except: pass
+        except:
+            pass
 
     def fetch_remote_roster(self):
         try:
             response = requests.get(f"{ROSTER_URL}?t={time.time()}", timeout=5)
             if response.status_code == 200:
-                self.roster_data = response.json()
-        except: pass
+                remote_data = response.json()
+
+                # EKSİK OYUNLARI EKLE (ROBLOX KAYBOLMASIN)
+                for game, players in self.roster_data.items():
+                    if game not in remote_data:
+                        remote_data[game] = players
+
+                self.roster_data = remote_data
+        except:
+            pass
 
     def connect_rpc(self):
         try:
             self.rpc = Presence(CLIENT_ID)
             self.rpc.connect()
             self.rpc.update(state="PlayzEsportHub", start=time.time())
-        except: pass
+        except:
+            pass
 
     def check_game_status(self):
         while True:
             try:
                 for proc in psutil.process_iter(['name']):
-                    if proc.info['name'].lower() in ["javaw.exe", "valorant.exe", "minecraft.exe", "robloxplayerbeta.exe"]:
+                    if proc.info['name'] and proc.info['name'].lower() in ["javaw.exe", "valorant.exe", "minecraft.exe", "robloxplayerbeta.exe"]:
                         requests.post(WEBHOOK_URL, json={"content": f"🎮 Kullanıcı şu an {proc.info['name']} oynuyor!"})
                         return
-            except: pass
+            except:
+                pass
             time.sleep(60)
 
     def setup_ui(self):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
+
         self.nav_frame = ctk.CTkFrame(self, corner_radius=0, fg_color=("#F5F5F5", "#121212"))
         self.nav_frame.grid(row=0, column=0, sticky="nsew")
         self.nav_frame.grid_rowconfigure(8, weight=1)
+
         self.logo_label = ctk.CTkLabel(self.nav_frame, text="PlayzEsport", font=self.title_font, text_color="#FF1493")
         self.logo_label.grid(row=0, column=0, padx=25, pady=(35, 45))
+
         self.btn_home = self.create_nav_btn("home", self.show_home)
         self.btn_home.grid(row=1, column=0, padx=15, pady=8, sticky="ew")
+
         self.btn_team = self.create_nav_btn("roster", self.show_roster)
         self.btn_team.grid(row=2, column=0, padx=15, pady=8, sticky="ew")
+
         self.btn_scores = self.create_nav_btn("scores", self.show_scores)
         self.btn_scores.grid(row=3, column=0, padx=15, pady=8, sticky="ew")
+
         self.btn_kick = self.create_nav_btn("watch", self.show_kick)
         self.btn_kick.grid(row=4, column=0, padx=15, pady=8, sticky="ew")
+
         self.btn_cheat = self.create_nav_btn("cheat", self.run_cheat_scan, fg_color="#A81010", hover_color="#E51A1A")
         self.btn_cheat.grid(row=6, column=0, padx=15, pady=(40, 8), sticky="ew")
+
         self.btn_settings = self.create_nav_btn("settings", self.show_settings, fg_color="transparent", border=2)
         self.btn_settings.grid(row=7, column=0, padx=15, pady=8, sticky="ew")
+
         self.main_frame = ctk.CTkFrame(self, fg_color=("#FFFFFF", "#1E1E1E"), corner_radius=20)
         self.main_frame.grid(row=0, column=1, padx=25, pady=25, sticky="nsew")
+
         self.frames = {}
         for F in ("home", "roster", "scores", "kick", "settings"):
             self.frames[F] = ctk.CTkFrame(self.main_frame, fg_color="transparent")
             self.frames[F].grid(row=0, column=0, sticky="nsew")
+
         self.main_frame.grid_rowconfigure(0, weight=1)
         self.main_frame.grid_columnconfigure(0, weight=1)
+
         self.refresh_ui()
         self.show_frame("home")
 
     def create_nav_btn(self, key, command, fg_color="#FF1493", hover_color="#FF69B4", border=0):
         txt = self.texts[self.current_lang][key]
         if border > 0:
-            return ctk.CTkButton(self.nav_frame, text=txt, font=self.btn_font, fg_color=fg_color, border_color="#FF1493", border_width=border, hover_color=("#E0E0E0", "#33001b"), text_color="#FF1493", height=45, corner_radius=10, command=command)
-        return ctk.CTkButton(self.nav_frame, text=txt, font=self.btn_font, fg_color=fg_color, hover_color=hover_color, height=45, corner_radius=10, command=command, text_color="white")
+            return ctk.CTkButton(
+                self.nav_frame,
+                text=txt,
+                font=self.btn_font,
+                fg_color=fg_color,
+                border_color="#FF1493",
+                border_width=border,
+                hover_color=("#E0E0E0", "#33001b"),
+                text_color="#FF1493",
+                height=45,
+                corner_radius=10,
+                command=command
+            )
+        return ctk.CTkButton(
+            self.nav_frame,
+            text=txt,
+            font=self.btn_font,
+            fg_color=fg_color,
+            hover_color=hover_color,
+            height=45,
+            corner_radius=10,
+            command=command,
+            text_color="white"
+        )
 
     def refresh_ui(self):
         for f in self.frames.values():
-            for w in f.winfo_children(): w.destroy()
-        self.build_home(); self.build_roster(); self.build_scores(); self.build_kick(); self.build_settings()
+            for w in f.winfo_children():
+                w.destroy()
+        self.build_home()
+        self.build_roster()
+        self.build_scores()
+        self.build_kick()
+        self.build_settings()
 
     def show_frame(self, name):
-        for f in self.frames.values(): f.grid_remove()
+        for f in self.frames.values():
+            f.grid_remove()
         self.frames[name].grid()
 
-    def show_home(self): self.show_frame("home")
-    def show_roster(self): self.show_frame("roster")
-    def show_scores(self): self.show_frame("scores")
-    def show_kick(self): self.show_frame("kick")
-    def show_settings(self): self.show_frame("settings")
+    def show_home(self):
+        self.show_frame("home")
+
+    def show_roster(self):
+        self.show_frame("roster")
+
+    def show_scores(self):
+        self.show_frame("scores")
+
+    def show_kick(self):
+        self.show_frame("kick")
+
+    def show_settings(self):
+        self.show_frame("settings")
 
     def build_home(self):
         f = self.frames["home"]
-        ctk.CTkLabel(f, text=self.texts[self.current_lang]["welcome"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=(60, 15))
-        ctk.CTkLabel(f, text=self.texts[self.current_lang]["info"], font=self.main_font, text_color="gray").pack(pady=10)
+        ctk.CTkLabel(
+            f,
+            text=self.texts[self.current_lang]["welcome"],
+            font=self.title_font,
+            text_color=("#121212", "#FFFFFF")
+        ).pack(pady=(60, 15))
+        ctk.CTkLabel(
+            f,
+            text=self.texts[self.current_lang]["info"],
+            font=self.main_font,
+            text_color="gray"
+        ).pack(pady=10)
 
     def build_roster(self):
         f = self.frames["roster"]
-        ctk.CTkLabel(f, text=self.texts[self.current_lang]["game_select"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=20)
+        ctk.CTkLabel(
+            f,
+            text=self.texts[self.current_lang]["game_select"],
+            font=self.title_font,
+            text_color=("#121212", "#FFFFFF")
+        ).pack(pady=20)
+
         sf = ctk.CTkScrollableFrame(f, fg_color="transparent")
         sf.pack(fill="both", expand=True, padx=30)
+
         for g in self.roster_data.keys():
-            b = ctk.CTkButton(sf, text=g, font=self.btn_font, height=70, corner_radius=15, fg_color=("#EEEEEE", "#2A2A2A"), text_color=("#121212", "#FFFFFF"), hover_color="#FF1493", command=lambda x=g: self.show_players(x))
+            b = ctk.CTkButton(
+                sf,
+                text=g,
+                font=self.btn_font,
+                height=70,
+                corner_radius=15,
+                fg_color=("#EEEEEE", "#2A2A2A"),
+                text_color=("#121212", "#FFFFFF"),
+                hover_color="#FF1493",
+                command=lambda x=g: self.show_players(x)
+            )
             b.pack(pady=10, fill="x")
-        self.p_lbl = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=18, weight="bold"), text_color=("#121212", "#FFFFFF"))
+
+        self.p_lbl = ctk.CTkLabel(
+            f,
+            text="",
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color=("#121212", "#FFFFFF")
+        )
         self.p_lbl.pack(pady=20)
 
     def show_players(self, g):
-        self.p_lbl.configure(text=f"━ {g} {self.texts[self.current_lang]['roster_title']} ━\n\n" + "\n".join(self.roster_data[g]))
+        self.p_lbl.configure(
+            text=f"━ {g} {self.texts[self.current_lang]['roster_title']} ━\n\n" + "\n".join(self.roster_data[g])
+        )
 
     def build_scores(self):
         f = self.frames["scores"]
-        ctk.CTkLabel(f, text=self.texts[self.current_lang]["live_scores"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=30)
+        ctk.CTkLabel(
+            f,
+            text=self.texts[self.current_lang]["live_scores"],
+            font=self.title_font,
+            text_color=("#121212", "#FFFFFF")
+        ).pack(pady=30)
+
         box = ctk.CTkFrame(f, fg_color=("#EEEEEE", "#2A2A2A"), corner_radius=15)
         box.pack(padx=50, fill="x", pady=20)
-        ctk.CTkLabel(box, text="Skor verisi bekleniyor...", font=self.main_font, text_color="gray").pack(pady=20)
+
+        ctk.CTkLabel(
+            box,
+            text="Skor verisi bekleniyor...",
+            font=self.main_font,
+            text_color="gray"
+        ).pack(pady=20)
 
     def build_kick(self):
         f = self.frames["kick"]
-        ctk.CTkButton(f, text=self.texts[self.current_lang]["start_stream"], font=self.btn_font, height=60, fg_color="#FF1493", command=lambda: webbrowser.open("https://kick.com/efelvs")).pack(pady=100)
+        ctk.CTkButton(
+            f,
+            text=self.texts[self.current_lang]["start_stream"],
+            font=self.btn_font,
+            height=60,
+            fg_color="#FF1493",
+            command=lambda: webbrowser.open("https://kick.com/efelvs")
+        ).pack(pady=100)
 
     def build_settings(self):
         f = self.frames["settings"]
-        ctk.CTkLabel(f, text=self.texts[self.current_lang]["settings"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=30)
-        ctk.CTkButton(f, text=self.texts[self.current_lang]["theme"], font=self.btn_font, height=45, fg_color=("#EEEEEE", "#2A2A2A"), text_color=("#121212", "#FFFFFF"), command=self.switch_theme).pack(pady=10)
-        ctk.CTkButton(f, text=self.texts[self.current_lang]["lang"], font=self.btn_font, height=45, fg_color=("#EEEEEE", "#2A2A2A"), text_color=("#121212", "#FFFFFF"), command=self.switch_lang).pack(pady=10)
+        ctk.CTkLabel(
+            f,
+            text=self.texts[self.current_lang]["settings"],
+            font=self.title_font,
+            text_color=("#121212", "#FFFFFF")
+        ).pack(pady=30)
 
-    def switch_theme(self): ctk.set_appearance_mode("light" if ctk.get_appearance_mode() == "Dark" else "dark")
+        ctk.CTkButton(
+            f,
+            text=self.texts[self.current_lang]["theme"],
+            font=self.btn_font,
+            height=45,
+            fg_color=("#EEEEEE", "#2A2A2A"),
+            text_color=("#121212", "#FFFFFF"),
+            command=self.switch_theme
+        ).pack(pady=10)
+
+        ctk.CTkButton(
+            f,
+            text=self.texts[self.current_lang]["lang"],
+            font=self.btn_font,
+            height=45,
+            fg_color=("#EEEEEE", "#2A2A2A"),
+            text_color=("#121212", "#FFFFFF"),
+            command=self.switch_lang
+        ).pack(pady=10)
+
+    def switch_theme(self):
+        ctk.set_appearance_mode("light" if ctk.get_appearance_mode() == "Dark" else "dark")
 
     def switch_lang(self):
         self.current_lang = "EN" if self.current_lang == "TR" else "TR"
@@ -210,13 +349,17 @@ class App(ctk.CTk):
         try:
             for p in psutil.process_iter(['name', 'exe']):
                 time.sleep(0.01)
-                n = p.info['name'].lower()
+                n = (p.info['name'] or "").lower()
                 path = (p.info['exe'] or "").lower()
                 if any(s in n or s in path for s in sigs):
                     messagebox.showerror("ALARM", f"{self.texts[self.current_lang]['found']} {n}")
-                    found = True; break
-        except: pass
-        if not found: messagebox.showinfo("OK", self.texts[self.current_lang]["clean"])
+                    found = True
+                    break
+        except:
+            pass
+
+        if not found:
+            messagebox.showinfo("OK", self.texts[self.current_lang]["clean"])
 
 if __name__ == "__main__":
     app = App()
