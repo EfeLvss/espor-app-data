@@ -15,7 +15,7 @@ from pypresence import Presence
 CLIENT_ID = "1497357433645961237"
 WEBHOOK_URL = "https://discord.com/api/webhooks/1497711458362982411/MA1_NY_s0kFLXf0M-lQU_ISoHDtOXyi1HYJPRl_jnXlWic08qxkafwtD0-I8kyuQ8RRd"
 
-APP_VERSION = "1.9"
+APP_VERSION = "2.0"
 VERSION_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/version.txt"
 CODE_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/main.py"
 ROSTER_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/kadro.json"
@@ -34,31 +34,30 @@ class OverlayWindow(ctk.CTkToplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-
         self.running = True
 
         self.overrideredirect(True)
         self.attributes("-topmost", True)
-        self.geometry("360x34+3+3")
-        self.configure(fg_color="#101010")
+        self.geometry("300x28+2+2")
+        self.configure(fg_color="#0B0B0B")
 
         try:
-            self.attributes("-alpha", 0.88)
+            self.attributes("-alpha", 0.80)
         except:
             pass
 
-        self.container = ctk.CTkFrame(self, fg_color="#101010", corner_radius=8)
+        self.container = ctk.CTkFrame(self, fg_color="#0B0B0B", corner_radius=6)
         self.container.pack(fill="both", expand=True, padx=1, pady=1)
 
         self.label = ctk.CTkLabel(
             self.container,
-            text="MC:OFF | VAL:OFF | P:0 | R:0 | C:0",
-            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            text="TPS:20.0 | P:0 | R:0%",
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
             text_color="#00FF99"
         )
-        self.label.pack(anchor="w", padx=10, pady=6)
+        self.label.pack(anchor="w", padx=8, pady=4)
 
-        self.after(200, self.enable_clickthrough)
+        self.after(150, self.enable_clickthrough)
         self.after(100, self.force_topmost)
         self.update_overlay()
 
@@ -83,42 +82,30 @@ class OverlayWindow(ctk.CTkToplevel):
         except:
             return 0
 
-    def is_process_running(self, names):
-        try:
-            for proc in psutil.process_iter(['name']):
-                pname = (proc.info['name'] or "").lower()
-                if pname in names:
-                    return True
-        except:
-            pass
-        return False
-
     def force_topmost(self):
         if self.running:
             try:
                 self.attributes("-topmost", True)
                 self.lift()
-                self.geometry("+3+3")  # hep sol üstte kalsın
+                self.geometry("+2+2")
             except:
                 pass
-            self.after(500, self.force_topmost)
+            self.after(1000, self.force_topmost)  # daha seyrek = daha hafif
 
     def update_overlay(self):
         if not self.running:
             return
 
-        ram = int(psutil.virtual_memory().percent)
-        cpu = int(psutil.cpu_percent(interval=0.05))
         ping = self.get_ping()
+        ram = int(psutil.virtual_memory().percent)
 
-        mc = "ON" if self.is_process_running(["javaw.exe", "minecraft.exe"]) else "OFF"
-        val = "ON" if self.is_process_running(["valorant.exe", "riotclientservices.exe"]) else "OFF"
+        # Şimdilik hafif ve stabil olsun diye sabit TPS
+        # Sonra istersen plugin/api ile gerçek TPS yaparız
+        tps = "20.0"
 
-        self.label.configure(
-            text=f"MC:{mc} | VAL:{val} | P:{ping} | R:{ram}% | C:{cpu}%"
-        )
+        self.label.configure(text=f"TPS:{tps} | P:{ping} | R:{ram}%")
 
-        self.after(300, self.update_overlay)
+        self.after(1500, self.update_overlay)  # çok hafif refresh
 
     def stop_overlay(self):
         self.running = False
@@ -185,44 +172,36 @@ class App(ctk.CTk):
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
-    # ---------------- AUTO UPDATE ----------------
     def auto_update(self):
         try:
             resp = requests.get(f"{VERSION_URL}?t={time.time()}", timeout=5)
             if resp.status_code == 200:
                 remote_v = resp.text.strip()
-                print("Local:", APP_VERSION, "| Remote:", remote_v)
-
                 if remote_v != APP_VERSION:
                     code_resp = requests.get(f"{CODE_URL}?t={time.time()}", timeout=10)
                     if code_resp.status_code == 200:
                         file_path = os.path.abspath(sys.argv[0])
-
                         with open(file_path, 'w', encoding='utf-8') as f:
                             f.write(code_resp.text)
 
                         messagebox.showinfo("Güncelleme", f"Yeni sürüm bulundu! ({remote_v}) Uygulama yeniden başlatılıyor.")
                         subprocess.Popen([sys.executable, file_path])
                         os._exit(0)
-        except Exception as e:
-            print("Update hatası:", e)
+        except:
+            pass
 
-    # ---------------- REMOTE ROSTER ----------------
     def fetch_remote_roster(self):
         try:
             response = requests.get(f"{ROSTER_URL}?t={time.time()}", timeout=5)
             if response.status_code == 200:
                 remote_data = response.json()
-
                 for game, players in self.roster_data.items():
                     if game not in remote_data:
                         remote_data[game] = players
-
                 self.roster_data = remote_data
         except:
             pass
 
-    # ---------------- DISCORD RPC ----------------
     def connect_rpc(self):
         try:
             self.rpc = Presence(CLIENT_ID)
@@ -231,7 +210,6 @@ class App(ctk.CTk):
         except:
             pass
 
-    # ---------------- GAME STATUS ----------------
     def check_game_status(self):
         while True:
             try:
@@ -244,7 +222,6 @@ class App(ctk.CTk):
                 pass
             time.sleep(60)
 
-    # ---------------- MINECRAFT BOOST ----------------
     def boost_minecraft(self):
         boosted = False
         try:
@@ -265,7 +242,6 @@ class App(ctk.CTk):
         else:
             messagebox.showwarning("Boost", "Minecraft açık değil kanka.")
 
-    # ---------------- UI ----------------
     def setup_ui(self):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
@@ -349,16 +325,13 @@ class App(ctk.CTk):
     def show_performance(self): self.show_frame("performance")
     def show_settings(self): self.show_frame("settings")
 
-    # ---------------- HOME ----------------
     def build_home(self):
         f = self.frames["home"]
         ctk.CTkLabel(f, text=self.texts["TR"]["welcome"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=(70, 15))
         ctk.CTkLabel(f, text=self.texts["TR"]["info"], font=self.main_font, text_color="gray").pack(pady=10)
 
-    # ---------------- ROSTER ----------------
     def build_roster(self):
         f = self.frames["roster"]
-
         ctk.CTkLabel(f, text=self.texts["TR"]["game_select"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=20)
 
         container = ctk.CTkFrame(f, fg_color="transparent")
@@ -389,7 +362,6 @@ class App(ctk.CTk):
 
     def show_players_panel(self, game):
         self.roster_info_lbl.configure(text=f"🎮 {game} {self.texts['TR']['roster_title']}")
-
         for w in self.player_box.winfo_children():
             w.destroy()
 
@@ -403,20 +375,12 @@ class App(ctk.CTk):
             card.pack(fill="x", pady=8)
             ctk.CTkLabel(card, text=f"{i}. {player}", font=ctk.CTkFont(size=18, weight="bold"), text_color=("#121212", "#FFFFFF")).pack(anchor="w", padx=18, pady=15)
 
-    # ---------------- SCORES ----------------
     def build_scores(self):
         f = self.frames["scores"]
         ctk.CTkLabel(f, text=self.texts["TR"]["live_scores"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=30)
 
-        box = ctk.CTkFrame(f, fg_color=("#EEEEEE", "#2A2A2A"), corner_radius=15)
-        box.pack(padx=50, fill="x", pady=20)
-
-        ctk.CTkLabel(box, text="Skor verisi bekleniyor...", font=self.main_font, text_color="gray").pack(pady=20)
-
-    # ---------------- WATCH ----------------
     def build_watch(self):
         f = self.frames["watch"]
-
         ctk.CTkLabel(f, text="Maç İzleme Merkezi", font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=(50, 30))
 
         card = ctk.CTkFrame(f, corner_radius=20, fg_color=("#EEEEEE", "#222222"))
@@ -434,7 +398,6 @@ class App(ctk.CTk):
             command=lambda: webbrowser.open("https://youtube.com/@efelvs")
         ).pack(padx=30, pady=(0, 30), fill="x")
 
-    # ---------------- PERFORMANCE ----------------
     def build_performance(self):
         f = self.frames["performance"]
 
@@ -461,29 +424,17 @@ class App(ctk.CTk):
             command=self.boost_minecraft
         ).pack(side="left", padx=10, pady=20)
 
-    # ---------------- SETTINGS ----------------
     def build_settings(self):
         f = self.frames["settings"]
-
         ctk.CTkLabel(f, text=self.texts["TR"]["settings"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=30)
 
-        ctk.CTkButton(
-            f, text=self.texts["TR"]["theme"], font=self.btn_font, height=45,
-            fg_color=("#EEEEEE", "#2A2A2A"), text_color=("#121212", "#FFFFFF"), command=self.switch_theme
-        ).pack(pady=10)
-
-    def switch_theme(self):
-        ctk.set_appearance_mode("light" if ctk.get_appearance_mode() == "Dark" else "dark")
-
-    # ---------------- ANTI CHEAT ----------------
     def run_cheat_scan(self):
         messagebox.showinfo("Anti-Cheat", self.texts["TR"]["scanning"])
 
         suspicious_keywords = [
             "wurst", "cheatengine", "vape", "huzuni", "aimbot", "killaura", "injector",
             "processhacker", "xenos", "dllinjector", "extremeinjector", "krnl", "synapse",
-            "scriptware", "fluxus", "electron", "solara", "jjsploit", "executor",
-            "silentaim", "esp", "wallhack", "triggerbot", "autoclicker"
+            "scriptware", "fluxus", "electron", "solara", "jjsploit", "executor"
         ]
 
         found_items = []
@@ -492,56 +443,13 @@ class App(ctk.CTk):
             for p in psutil.process_iter(['name', 'exe']):
                 pname = (p.info['name'] or "").lower()
                 pexe = (p.info['exe'] or "").lower()
-
                 if any(k in pname or k in pexe for k in suspicious_keywords):
                     found_items.append(f"PROCESS: {p.info['name']} | {p.info['exe']}")
         except:
             pass
 
-        try:
-            mc_path = os.path.join(os.path.expanduser("~"), "AppData", "Roaming", ".minecraft")
-            mc_scan_paths = [
-                os.path.join(mc_path, "mods"),
-                os.path.join(mc_path, "versions"),
-                os.path.join(mc_path, "resourcepacks"),
-                os.path.join(mc_path, "logs")
-            ]
-
-            mc_keywords = [
-                "wurst", "meteor", "impact", "aristois", "vape", "huzuni",
-                "liquidbounce", "sigma", "future", "raven", "killaura",
-                "xray", "autototem", "triggerbot", "baritone"
-            ]
-
-            for base in mc_scan_paths:
-                if not os.path.exists(base):
-                    continue
-
-                scanned_count = 0
-                max_mc_files = 2000
-
-                for root, dirs, files in os.walk(base):
-                    for name in files:
-                        scanned_count += 1
-                        if scanned_count > max_mc_files:
-                            break
-
-                        lower_name = name.lower()
-                        full_path = os.path.join(root, name).lower()
-
-                        if any(k in lower_name or k in full_path for k in mc_keywords):
-                            found_items.append(f"MINECRAFT FILE: {os.path.join(root, name)}")
-
-                    if scanned_count > max_mc_files:
-                        break
-        except:
-            pass
-
         if found_items:
             preview = "\n".join(found_items[:8])
-            if len(found_items) > 8:
-                preview += f"\n... ve {len(found_items)-8} tane daha"
-
             messagebox.showerror("ALARM", f"{self.texts['TR']['found']}\n\n{preview}")
         else:
             messagebox.showinfo("OK", f"{self.texts['TR']['clean']}\n{self.texts['TR']['scan_done']}")
