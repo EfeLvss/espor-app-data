@@ -15,7 +15,7 @@ from pypresence import Presence
 CLIENT_ID = "1497357433645961237"
 WEBHOOK_URL = "https://discord.com/api/webhooks/1497711458362982411/MA1_NY_s0kFLXf0M-lQU_ISoHDtOXyi1HYJPRl_jnXlWic08qxkafwtD0-I8kyuQ8RRd"
 
-APP_VERSION = "2.0"
+APP_VERSION = "2.1"
 VERSION_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/version.txt"
 CODE_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/main.py"
 ROSTER_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/kadro.json"
@@ -76,7 +76,7 @@ class OverlayWindow(ctk.CTkToplevel):
     def get_ping(self):
         try:
             start = time.time()
-            s = socket.create_connection(("8.8.8.8", 53), timeout=1)
+            s = socket.create_connection(("8.8.8.8", 53), timeout=0.6)
             s.close()
             return int((time.time() - start) * 1000)
         except:
@@ -90,7 +90,7 @@ class OverlayWindow(ctk.CTkToplevel):
                 self.geometry("+2+2")
             except:
                 pass
-            self.after(1000, self.force_topmost)  # daha seyrek = daha hafif
+            self.after(1000, self.force_topmost)
 
     def update_overlay(self):
         if not self.running:
@@ -98,14 +98,10 @@ class OverlayWindow(ctk.CTkToplevel):
 
         ping = self.get_ping()
         ram = int(psutil.virtual_memory().percent)
-
-        # Şimdilik hafif ve stabil olsun diye sabit TPS
-        # Sonra istersen plugin/api ile gerçek TPS yaparız
         tps = "20.0"
 
         self.label.configure(text=f"TPS:{tps} | P:{ping} | R:{ram}%")
-
-        self.after(1500, self.update_overlay)  # çok hafif refresh
+        self.after(1500, self.update_overlay)
 
     def stop_overlay(self):
         self.running = False
@@ -164,35 +160,82 @@ class App(ctk.CTk):
             "Minecraft": ["Cloopzy", "EfeLvs"]
         }
 
-        self.auto_update()
-        self.fetch_remote_roster()
-        self.connect_rpc()
+        # UI önce açılsın = hızlı açılış
         self.setup_ui()
+
+        # Ağ işleri arka planda
+        threading.Thread(target=self.auto_update_loop, daemon=True).start()
+        threading.Thread(target=self.fetch_remote_roster_and_refresh, daemon=True).start()
+        threading.Thread(target=self.connect_rpc, daemon=True).start()
         threading.Thread(target=self.check_game_status, daemon=True).start()
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
+    # ---------------- UPDATE ----------------
     def auto_update(self):
         try:
-            resp = requests.get(f"{VERSION_URL}?t={time.time()}", timeout=5)
-            if resp.status_code == 200:
-                remote_v = resp.text.strip()
-                if remote_v != APP_VERSION:
-                    code_resp = requests.get(f"{CODE_URL}?t={time.time()}", timeout=10)
-                    if code_resp.status_code == 200:
-                        file_path = os.path.abspath(sys.argv[0])
-                        with open(file_path, 'w', encoding='utf-8') as f:
-                            f.write(code_resp.text)
+            headers = {
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
 
-                        messagebox.showinfo("Güncelleme", f"Yeni sürüm bulundu! ({remote_v}) Uygulama yeniden başlatılıyor.")
-                        subprocess.Popen([sys.executable, file_path])
-                        os._exit(0)
-        except:
-            pass
+            version_url = f"{VERSION_URL}?t={int(time.time() * 1000)}"
+            resp = requests.get(version_url, headers=headers, timeout=2.5)
 
+            if resp.status_code != 200:
+                return
+
+            remote_v = resp.text.strip().replace("\ufeff", "").replace("\n", "").replace("\r", "")
+            local_v = str(APP_VERSION).strip()
+
+            print("Local:", local_v, "| Remote:", remote_v)
+
+            if not remote_v or remote_v == local_v:
+                return
+
+            code_url = f"{CODE_URL}?t={int(time.time() * 1000)}"
+            code_resp = requests.get(code_url, headers=headers, timeout=6)
+
+            if code_resp.status_code == 200 and len(code_resp.text) > 500:
+                file_path = os.path.abspath(sys.argv[0])
+
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(code_resp.text)
+
+                try:
+                    self.after(0, lambda: messagebox.showinfo(
+                        "Güncelleme",
+                        f"Yeni sürüm bulundu! ({remote_v}) Uygulama yeniden başlatılıyor."
+                    ))
+                except:
+                    pass
+
+                time.sleep(1)
+                subprocess.Popen([sys.executable, file_path])
+                os._exit(0)
+
+        except Exception as e:
+            print("Update hatası:", e)
+
+    def auto_update_loop(self):
+        # Açılışta hemen kontrol
+        self.auto_update()
+
+        # İlk 20 saniye sık kontrol
+        for _ in range(4):
+            time.sleep(5)
+            self.auto_update()
+
+        # Sonra normal kontrol
+        while True:
+            time.sleep(30)
+            self.auto_update()
+
+    # ---------------- ROSTER ----------------
     def fetch_remote_roster(self):
         try:
-            response = requests.get(f"{ROSTER_URL}?t={time.time()}", timeout=5)
+            response = requests.get(f"{ROSTER_URL}?t={int(time.time() * 1000)}", timeout=2.5)
             if response.status_code == 200:
                 remote_data = response.json()
                 for game, players in self.roster_data.items():
@@ -202,6 +245,14 @@ class App(ctk.CTk):
         except:
             pass
 
+    def fetch_remote_roster_and_refresh(self):
+        self.fetch_remote_roster()
+        try:
+            self.after(0, self.refresh_ui)
+        except:
+            pass
+
+    # ---------------- DISCORD RPC ----------------
     def connect_rpc(self):
         try:
             self.rpc = Presence(CLIENT_ID)
@@ -210,6 +261,7 @@ class App(ctk.CTk):
         except:
             pass
 
+    # ---------------- GAME STATUS ----------------
     def check_game_status(self):
         while True:
             try:
@@ -222,6 +274,7 @@ class App(ctk.CTk):
                 pass
             time.sleep(60)
 
+    # ---------------- MINECRAFT BOOST ----------------
     def boost_minecraft(self):
         boosted = False
         try:
@@ -242,6 +295,7 @@ class App(ctk.CTk):
         else:
             messagebox.showwarning("Boost", "Minecraft açık değil kanka.")
 
+    # ---------------- UI ----------------
     def setup_ui(self):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
