@@ -7,6 +7,7 @@ import threading
 import webbrowser
 import subprocess
 import socket
+import ctypes
 import customtkinter as ctk
 from tkinter import messagebox
 from pypresence import Presence
@@ -14,7 +15,7 @@ from pypresence import Presence
 CLIENT_ID = "1497357433645961237"
 WEBHOOK_URL = "https://discord.com/api/webhooks/1497711458362982411/MA1_NY_s0kFLXf0M-lQU_ISoHDtOXyi1HYJPRl_jnXlWic08qxkafwtD0-I8kyuQ8RRd"
 
-APP_VERSION = "1.8"
+APP_VERSION = "1.9"
 VERSION_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/version.txt"
 CODE_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/main.py"
 ROSTER_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/kadro.json"
@@ -22,36 +23,56 @@ ROSTER_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/head
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
 
+# Windows click-through styles
+GWL_EXSTYLE = -20
+WS_EX_LAYERED = 0x00080000
+WS_EX_TRANSPARENT = 0x00000020
+WS_EX_TOOLWINDOW = 0x00000080
+
 
 class OverlayWindow(ctk.CTkToplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
 
+        self.running = True
+
         self.overrideredirect(True)
         self.attributes("-topmost", True)
-        self.geometry("680x52+12+12")
-        self.configure(fg_color="#111111")
+        self.geometry("360x34+3+3")
+        self.configure(fg_color="#101010")
 
         try:
-            self.attributes("-alpha", 0.93)
+            self.attributes("-alpha", 0.88)
         except:
             pass
 
-        self.container = ctk.CTkFrame(self, fg_color="#111111", corner_radius=12)
-        self.container.pack(fill="both", expand=True, padx=2, pady=2)
+        self.container = ctk.CTkFrame(self, fg_color="#101010", corner_radius=8)
+        self.container.pack(fill="both", expand=True, padx=1, pady=1)
 
         self.label = ctk.CTkLabel(
             self.container,
-            text="Minecraft: OFF | Ping: 0 ms | RAM: 0% | CPU: 0%",
-            font=ctk.CTkFont(family="Segoe UI", size=16, weight="bold"),
+            text="MC:OFF | VAL:OFF | P:0 | R:0 | C:0",
+            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
             text_color="#00FF99"
         )
-        self.label.pack(side="left", padx=16, pady=10)
+        self.label.pack(anchor="w", padx=10, pady=6)
 
-        self.running = True
+        self.after(200, self.enable_clickthrough)
         self.after(100, self.force_topmost)
         self.update_overlay()
+
+    def enable_clickthrough(self):
+        try:
+            hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+            styles = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+            ctypes.windll.user32.SetWindowLongW(
+                hwnd,
+                GWL_EXSTYLE,
+                styles | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW
+            )
+        except:
+            pass
 
     def get_ping(self):
         try:
@@ -62,11 +83,11 @@ class OverlayWindow(ctk.CTkToplevel):
         except:
             return 0
 
-    def is_minecraft_running(self):
+    def is_process_running(self, names):
         try:
             for proc in psutil.process_iter(['name']):
-                name = (proc.info['name'] or "").lower()
-                if name in ["javaw.exe", "minecraft.exe"]:
+                pname = (proc.info['name'] or "").lower()
+                if pname in names:
                     return True
         except:
             pass
@@ -77,6 +98,7 @@ class OverlayWindow(ctk.CTkToplevel):
             try:
                 self.attributes("-topmost", True)
                 self.lift()
+                self.geometry("+3+3")  # hep sol üstte kalsın
             except:
                 pass
             self.after(500, self.force_topmost)
@@ -85,16 +107,18 @@ class OverlayWindow(ctk.CTkToplevel):
         if not self.running:
             return
 
-        ram = psutil.virtual_memory().percent
-        cpu = psutil.cpu_percent(interval=0.1)
+        ram = int(psutil.virtual_memory().percent)
+        cpu = int(psutil.cpu_percent(interval=0.05))
         ping = self.get_ping()
-        mc = "ON" if self.is_minecraft_running() else "OFF"
+
+        mc = "ON" if self.is_process_running(["javaw.exe", "minecraft.exe"]) else "OFF"
+        val = "ON" if self.is_process_running(["valorant.exe", "riotclientservices.exe"]) else "OFF"
 
         self.label.configure(
-            text=f"Minecraft: {mc}   |   Ping: {ping} ms   |   RAM: {ram}%   |   CPU: {cpu}%"
+            text=f"MC:{mc} | VAL:{val} | P:{ping} | R:{ram}% | C:{cpu}%"
         )
 
-        self.after(400, self.update_overlay)
+        self.after(300, self.update_overlay)
 
     def stop_overlay(self):
         self.running = False
@@ -116,10 +140,6 @@ class App(ctk.CTk):
         self.current_lang = "TR"
         self.overlay_window = None
 
-        self.last_logged_command = None
-        self.last_log_size = 0
-        self.command_monitor_started = False
-
         self.texts = {
             "TR": {
                 "home": "Ana Sayfa",
@@ -135,7 +155,6 @@ class App(ctk.CTk):
                 "roster_title": "Kadrosu",
                 "live_scores": "Canlı Maç Skorları",
                 "theme": "Tema Değiştir",
-                "lang": "Dil / Language",
                 "clean": "Sistem Temiz!",
                 "found": "Şüpheli öğe bulundu:",
                 "scanning": "Derin tarama başlatıldı...",
@@ -158,14 +177,11 @@ class App(ctk.CTk):
             "Minecraft": ["Cloopzy", "EfeLvs"]
         }
 
-        self.selected_game = None
-
         self.auto_update()
         self.fetch_remote_roster()
         self.connect_rpc()
         self.setup_ui()
         threading.Thread(target=self.check_game_status, daemon=True).start()
-        threading.Thread(target=self.monitor_minecraft_commands, daemon=True).start()
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
@@ -248,57 +264,6 @@ class App(ctk.CTk):
             messagebox.showinfo("Boost", self.texts["TR"]["boost_info"])
         else:
             messagebox.showwarning("Boost", "Minecraft açık değil kanka.")
-
-    # ---------------- MINECRAFT COMMAND MONITOR (OWN CLIENT ONLY) ----------------
-    def monitor_minecraft_commands(self):
-        log_path = os.path.join(os.path.expanduser("~"), "AppData", "Roaming", ".minecraft", "logs", "latest.log")
-
-        while True:
-            try:
-                if not os.path.exists(log_path):
-                    time.sleep(3)
-                    continue
-
-                current_size = os.path.getsize(log_path)
-
-                if self.last_log_size == 0:
-                    self.last_log_size = current_size
-                    time.sleep(2)
-                    continue
-
-                if current_size < self.last_log_size:
-                    self.last_log_size = 0
-                    time.sleep(2)
-                    continue
-
-                if current_size > self.last_log_size:
-                    with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
-                        f.seek(self.last_log_size)
-                        new_text = f.read()
-
-                    self.last_log_size = current_size
-
-                    lines = new_text.splitlines()
-                    for line in lines:
-                        line_lower = line.lower()
-
-                        # sadece kendi client chat loguna düşen slash komutlar
-                        if "]: [render thread/info]" in line_lower and "> /" in line:
-                            try:
-                                cmd_part = line.split("> ", 1)[1].strip()
-                                if cmd_part.startswith("/"):
-                                    if cmd_part != self.last_logged_command:
-                                        self.last_logged_command = cmd_part
-                                        requests.post(WEBHOOK_URL, json={
-                                            "content": f"🟢 Minecraft kendi komutun: `{cmd_part}`"
-                                        })
-                            except:
-                                pass
-
-            except Exception as e:
-                print("Command monitor hatası:", e)
-
-            time.sleep(1.5)
 
     # ---------------- UI ----------------
     def setup_ui(self):
@@ -423,7 +388,6 @@ class App(ctk.CTk):
             b.pack(pady=10, fill="x")
 
     def show_players_panel(self, game):
-        self.selected_game = game
         self.roster_info_lbl.configure(text=f"🎮 {game} {self.texts['TR']['roster_title']}")
 
         for w in self.player_box.winfo_children():
@@ -496,15 +460,6 @@ class App(ctk.CTk):
             height=55, fg_color="#3366FF", hover_color="#4A7BFF", corner_radius=14,
             command=self.boost_minecraft
         ).pack(side="left", padx=10, pady=20)
-
-        stats = ctk.CTkFrame(f, corner_radius=20, fg_color=("#EEEEEE", "#222222"))
-        stats.pack(fill="x", padx=40, pady=10)
-
-        cpu = psutil.cpu_percent(interval=0.1)
-        ram = psutil.virtual_memory().percent
-
-        ctk.CTkLabel(stats, text=f"CPU Kullanımı: %{cpu}", font=ctk.CTkFont(size=18, weight="bold"), text_color="#FFFFFF").pack(anchor="w", padx=20, pady=(18, 6))
-        ctk.CTkLabel(stats, text=f"RAM Kullanımı: %{ram}", font=ctk.CTkFont(size=18, weight="bold"), text_color="#FFFFFF").pack(anchor="w", padx=20, pady=(0, 18))
 
     # ---------------- SETTINGS ----------------
     def build_settings(self):
