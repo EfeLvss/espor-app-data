@@ -13,7 +13,7 @@ from pypresence import Presence
 CLIENT_ID = "1497357433645961237"
 WEBHOOK_URL = "https://discord.com/api/webhooks/1497711458362982411/MA1_NY_s0kFLXf0M-lQU_ISoHDtOXyi1HYJPRl_jnXlWic08qxkafwtD0-I8kyuQ8RRd"
 
-APP_VERSION = "1.2"
+APP_VERSION = "1.3"
 VERSION_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/version.txt"
 CODE_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/main.py"
 ROSTER_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/kadro.json"
@@ -42,7 +42,7 @@ class App(ctk.CTk):
                 "live_scores": "Canlı Maç Skorları", "start_stream": "🔴 EfeLvs Canlı İzle",
                 "theme": "Tema Değiştir", "lang": "Dil / Language",
                 "cheat_warn": "Tarama için oyunun açık olması lazım!", "clean": "Sistem Temiz!",
-                "found": "Zararlı işlem bulundu:", "scanning": "Derin tarama yapılıyor, lütfen bekleyin..."
+                "found": "Zararlı işlem bulundu:", "scanning": "Derin tarama yapılıyor..."
             },
             "EN": {
                 "home": "Home", "roster": "Roster", "scores": "Match Scores", "watch": "Watch Match",
@@ -52,7 +52,7 @@ class App(ctk.CTk):
                 "live_scores": "Live Match Scores", "start_stream": "🔴 Watch EfeLvs Live",
                 "theme": "Switch Theme", "lang": "Language / Dil",
                 "cheat_warn": "Game must be running for scan!", "clean": "System Clean!",
-                "found": "Suspicious process found:", "scanning": "Deep scanning, please wait..."
+                "found": "Suspicious process found:", "scanning": "Deep scanning..."
             }
         }
         
@@ -83,24 +83,21 @@ class App(ctk.CTk):
                             f.write(code_resp.text)
                         subprocess.Popen([sys.executable, file_path])
                         os._exit(0)
-        except:
-            pass
+        except: pass
 
     def fetch_remote_roster(self):
         try:
             response = requests.get(f"{ROSTER_URL}?t={time.time()}", timeout=5)
             if response.status_code == 200:
                 self.roster_data = response.json()
-        except:
-            pass
+        except: pass
 
     def connect_rpc(self):
         try:
             self.rpc = Presence(CLIENT_ID)
             self.rpc.connect()
             self.rpc.update(state="PlayzEsportHub", start=time.time())
-        except:
-            pass
+        except: pass
 
     def check_game_status(self):
         while True:
@@ -164,12 +161,7 @@ class App(ctk.CTk):
     def refresh_ui(self):
         for f in self.frames.values():
             for w in f.winfo_children(): w.destroy()
-        
-        self.build_home()
-        self.build_roster()
-        self.build_scores()
-        self.build_kick()
-        self.build_settings()
+        self.build_home(); self.build_roster(); self.build_scores(); self.build_kick(); self.build_settings()
 
     def show_frame(self, name):
         for f in self.frames.values(): f.grid_remove()
@@ -191,10 +183,9 @@ class App(ctk.CTk):
         ctk.CTkLabel(f, text=self.texts[self.current_lang]["game_select"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=20)
         sf = ctk.CTkScrollableFrame(f, fg_color="transparent")
         sf.pack(fill="both", expand=True, padx=30)
-        for i, g in enumerate(self.roster_data.keys()):
+        for g in self.roster_data.keys():
             b = ctk.CTkButton(sf, text=g, font=self.btn_font, height=70, corner_radius=15, fg_color=("#EEEEEE", "#2A2A2A"), text_color=("#121212", "#FFFFFF"), hover_color="#FF1493", command=lambda x=g: self.show_players(x))
-            b.grid(row=i//2, column=i%2, padx=10, pady=10, sticky="nsew")
-            sf.grid_columnconfigure(i%2, weight=1)
+            b.pack(pady=10, fill="x")
         self.p_lbl = ctk.CTkLabel(f, text="", font=ctk.CTkFont(size=18, weight="bold"), text_color=("#121212", "#FFFFFF"))
         self.p_lbl.pack(pady=20)
 
@@ -206,7 +197,7 @@ class App(ctk.CTk):
         ctk.CTkLabel(f, text=self.texts[self.current_lang]["live_scores"], font=self.title_font, text_color=("#121212", "#FFFFFF")).pack(pady=30)
         box = ctk.CTkFrame(f, fg_color=("#EEEEEE", "#2A2A2A"), corner_radius=15)
         box.pack(padx=50, fill="x", pady=20)
-        ctk.CTkLabel(box, text="Buraya manuel skor girişi yapabilirsin", font=self.main_font, text_color="gray").pack(pady=20)
+        ctk.CTkLabel(box, text="Skor verisi bekleniyor...", font=self.main_font, text_color="gray").pack(pady=20)
 
     def build_kick(self):
         f = self.frames["kick"]
@@ -218,17 +209,10 @@ class App(ctk.CTk):
         ctk.CTkButton(f, text=self.texts[self.current_lang]["theme"], font=self.btn_font, height=45, fg_color=("#EEEEEE", "#2A2A2A"), text_color=("#121212", "#FFFFFF"), command=self.switch_theme).pack(pady=10)
         ctk.CTkButton(f, text=self.texts[self.current_lang]["lang"], font=self.btn_font, height=45, fg_color=("#EEEEEE", "#2A2A2A"), text_color=("#121212", "#FFFFFF"), command=self.switch_lang).pack(pady=10)
 
-    def switch_theme(self):
-        ctk.set_appearance_mode("light" if ctk.get_appearance_mode() == "Dark" else "dark")
+    def switch_theme(self): ctk.set_appearance_mode("light" if ctk.get_appearance_mode() == "Dark" else "dark")
 
     def switch_lang(self):
         self.current_lang = "EN" if self.current_lang == "TR" else "TR"
-        self.btn_home.configure(text=self.texts[self.current_lang]["home"])
-        self.btn_team.configure(text=self.texts[self.current_lang]["roster"])
-        self.btn_scores.configure(text=self.texts[self.current_lang]["scores"])
-        self.btn_kick.configure(text=self.texts[self.current_lang]["watch"])
-        self.btn_cheat.configure(text=self.texts[self.current_lang]["cheat"])
-        self.btn_settings.configure(text=self.texts[self.current_lang]["settings"])
         self.refresh_ui()
 
     def run_cheat_scan(self):
@@ -239,8 +223,7 @@ class App(ctk.CTk):
             for p in psutil.process_iter(['name', 'exe']):
                 time.sleep(0.01)
                 n = p.info['name'].lower()
-                path = (p.info['exe'] or "").lower()
-                if any(s in n or s in path for s in sigs):
+                if any(s in n for s in sigs):
                     messagebox.showerror("ALARM", f"{self.texts[self.current_lang]['found']} {n}")
                     found = True; break
         except: pass
