@@ -9,15 +9,16 @@ import subprocess
 import socket
 import ctypes
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 from pypresence import Presence
+from moviepy import VideoFileClip
 
 CLIENT_ID = "1497357433645961237"
 WEBHOOK_URL = "https://discord.com/api/webhooks/1497711458362982411/MA1_NY_s0kFLXf0M-lQU_ISoHDtOXyi1HYJPRl_jnXlWic08qxkafwtD0-I8kyuQ8RRd"
 
-APP_VERSION = "2.2"
+APP_VERSION = "2.3"
 VERSION_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/version.txt"
-CODE_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/main.py"
+CODE_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/main.pyw"
 ROSTER_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/heads/main/kadro.json"
 
 ctk.set_appearance_mode("dark")
@@ -61,7 +62,6 @@ class OverlayWindow(ctk.CTkToplevel):
         self.after(150, self.enable_clickthrough)
         self.after(100, self.force_topmost)
 
-        # Ping'i ayrı thread'de yavaş güncelle = daha az kasma
         threading.Thread(target=self.ping_loop, daemon=True).start()
         self.update_overlay()
 
@@ -80,7 +80,7 @@ class OverlayWindow(ctk.CTkToplevel):
     def ping_loop(self):
         while self.running:
             self.cached_ping = self.get_ping()
-            time.sleep(3)  # çok daha hafif
+            time.sleep(3)
 
     def get_ping(self):
         try:
@@ -99,7 +99,7 @@ class OverlayWindow(ctk.CTkToplevel):
                 self.geometry("+2+2")
             except:
                 pass
-            self.after(1500, self.force_topmost)  # daha seyrek = daha hafif
+            self.after(1500, self.force_topmost)
 
     def update_overlay(self):
         if not self.running:
@@ -109,7 +109,7 @@ class OverlayWindow(ctk.CTkToplevel):
         tps = "20.0"
 
         self.label.configure(text=f"TPS:{tps} | P:{self.cached_ping} | R:{ram}%")
-        self.after(2000, self.update_overlay)  # daha seyrek = daha hafif
+        self.after(2000, self.update_overlay)
 
     def stop_overlay(self):
         self.running = False
@@ -138,10 +138,11 @@ class App(ctk.CTk):
                 "scores": "Maç Skorları",
                 "watch": "Maç İzle",
                 "performance": "Performance",
+                "compressor": "Video Sıkıştırıcı",
                 "cheat": "Anti-Cheat (Derin Tarama)",
                 "settings": "Ayarlar",
                 "welcome": "PlayzEsportHub'a Hoş Geldin!",
-                "info": "Kadro takibi, skorlar, yayınlar ve performans araçları.",
+                "info": "Kadro takibi, yayınlar, performans araçları ve video sıkıştırıcı.",
                 "game_select": "Kadro Seçimi",
                 "roster_title": "Kadrosu",
                 "live_scores": "Canlı Maç Skorları",
@@ -157,7 +158,10 @@ class App(ctk.CTk):
                 "overlay_on": "Overlay Aç",
                 "overlay_off": "Overlay Kapat",
                 "boost_mc": "Minecraft Boost Aç",
-                "boost_info": "Minecraft önceliği yükseltildi."
+                "boost_info": "Minecraft önceliği yükseltildi.",
+                "compress_title": "Video Sıkıştırıcı",
+                "compress_desc": "Video seç ve yaklaşık 50 MB'a sıkıştır.",
+                "select_video": "Video Seç ve 50MB Yap"
             },
             "EN": {
                 "home": "Home",
@@ -165,10 +169,11 @@ class App(ctk.CTk):
                 "scores": "Match Scores",
                 "watch": "Watch Match",
                 "performance": "Performance",
+                "compressor": "Video Compressor",
                 "cheat": "Anti-Cheat (Deep Scan)",
                 "settings": "Settings",
                 "welcome": "Welcome to PlayzEsportHub!",
-                "info": "Track rosters, streams and performance tools.",
+                "info": "Track rosters, streams, performance tools and video compressor.",
                 "game_select": "Roster Selection",
                 "roster_title": "Roster",
                 "live_scores": "Live Match Scores",
@@ -184,7 +189,10 @@ class App(ctk.CTk):
                 "overlay_on": "Enable Overlay",
                 "overlay_off": "Disable Overlay",
                 "boost_mc": "Enable Minecraft Boost",
-                "boost_info": "Minecraft priority increased."
+                "boost_info": "Minecraft priority increased.",
+                "compress_title": "Video Compressor",
+                "compress_desc": "Choose a video and compress it to about 50 MB.",
+                "select_video": "Choose Video and Make 50MB"
             }
         }
 
@@ -196,10 +204,8 @@ class App(ctk.CTk):
             "Minecraft": ["Cloopzy", "EfeLvs"]
         }
 
-        # UI önce açılsın = hızlı açılış
         self.setup_ui()
 
-        # Ağ işleri arka planda
         threading.Thread(target=self.auto_update_loop, daemon=True).start()
         threading.Thread(target=self.fetch_remote_roster_and_refresh, daemon=True).start()
         threading.Thread(target=self.connect_rpc, daemon=True).start()
@@ -225,8 +231,6 @@ class App(ctk.CTk):
             remote_v = resp.text.strip().replace("\ufeff", "").replace("\n", "").replace("\r", "")
             local_v = str(APP_VERSION).strip()
 
-            print("Local:", local_v, "| Remote:", remote_v)
-
             if not remote_v or remote_v == local_v:
                 return
 
@@ -248,11 +252,11 @@ class App(ctk.CTk):
                     pass
 
                 time.sleep(1)
-                subprocess.Popen([sys.executable, file_path])
+                subprocess.Popen([sys.executable, file_path], creationflags=subprocess.CREATE_NO_WINDOW)
                 os._exit(0)
 
-        except Exception as e:
-            print("Update hatası:", e)
+        except:
+            pass
 
     def auto_update_loop(self):
         self.auto_update()
@@ -328,6 +332,93 @@ class App(ctk.CTk):
         else:
             messagebox.showwarning("Boost", "Minecraft açık değil kanka." if self.current_lang == "TR" else "Minecraft is not open.")
 
+    # ---------------- VIDEO COMPRESSOR ----------------
+    def compress_video_to_50mb(self):
+        try:
+            input_path = filedialog.askopenfilename(
+                title="Video seç" if self.current_lang == "TR" else "Choose video",
+                filetypes=[("Video Files", "*.mp4 *.mov *.avi *.mkv *.webm")]
+            )
+
+            if not input_path:
+                return
+
+            save_path = filedialog.asksaveasfilename(
+                title="Kaydet" if self.current_lang == "TR" else "Save As",
+                defaultextension=".mp4",
+                filetypes=[("MP4 Video", "*.mp4")],
+                initialfile="compressed_50mb.mp4"
+            )
+
+            if not save_path:
+                return
+
+            messagebox.showinfo(
+                self.texts[self.current_lang]["compress_title"],
+                "Sıkıştırma başladı. Büyük videoda sürebilir."
+                if self.current_lang == "TR" else
+                "Compression started. Large videos may take some time."
+            )
+
+            target_size_mb = 50
+            target_size_bits = target_size_mb * 1024 * 1024 * 8
+
+            clip = VideoFileClip(input_path)
+            duration = clip.duration
+
+            if duration <= 0:
+                messagebox.showerror("Hata" if self.current_lang == "TR" else "Error",
+                                     "Video süresi okunamadı." if self.current_lang == "TR" else "Video duration could not be read.")
+                clip.close()
+                return
+
+            audio_bitrate_kbps = 96
+            total_bitrate_bps = target_size_bits / duration
+            video_bitrate_kbps = int((total_bitrate_bps / 1000) - audio_bitrate_kbps)
+
+            if video_bitrate_kbps < 250:
+                video_bitrate_kbps = 250
+
+            width, height = clip.size
+            if width > 1280:
+                clip = clip.resized(width=1280)
+
+            clip.write_videofile(
+                save_path,
+                codec="libx264",
+                audio_codec="aac",
+                bitrate=f"{video_bitrate_kbps}k",
+                audio_bitrate=f"{audio_bitrate_kbps}k",
+                preset="slow",
+                threads=4,
+                logger=None
+            )
+
+            clip.close()
+
+            final_size_mb = os.path.getsize(save_path) / (1024 * 1024)
+
+            if final_size_mb <= 50.5:
+                messagebox.showinfo(
+                    "Başarılı" if self.current_lang == "TR" else "Success",
+                    f"Video sıkıştırıldı!\nBoyut: {final_size_mb:.2f} MB"
+                    if self.current_lang == "TR" else
+                    f"Video compressed!\nSize: {final_size_mb:.2f} MB"
+                )
+            else:
+                messagebox.showwarning(
+                    "Uyarı" if self.current_lang == "TR" else "Warning",
+                    f"Video sıkıştırıldı ama çıktı {final_size_mb:.2f} MB oldu."
+                    if self.current_lang == "TR" else
+                    f"Video compressed but output is {final_size_mb:.2f} MB."
+                )
+
+        except Exception as e:
+            messagebox.showerror(
+                "Hata" if self.current_lang == "TR" else "Error",
+                f"Video sıkıştırma hatası:\n{str(e)}"
+            )
+
     # ---------------- SETTINGS ACTIONS ----------------
     def switch_theme(self):
         current = ctk.get_appearance_mode()
@@ -347,7 +438,7 @@ class App(ctk.CTk):
 
         self.nav_frame = ctk.CTkFrame(self, corner_radius=0, fg_color=("#F5F5F5", "#121212"), width=280)
         self.nav_frame.grid(row=0, column=0, sticky="nsew")
-        self.nav_frame.grid_rowconfigure(10, weight=1)
+        self.nav_frame.grid_rowconfigure(12, weight=1)
 
         self.logo_label = ctk.CTkLabel(self.nav_frame, text="PlayzEsport", font=self.title_font, text_color="#FF1493")
         self.logo_label.grid(row=0, column=0, padx=25, pady=(35, 35))
@@ -367,17 +458,20 @@ class App(ctk.CTk):
         self.btn_perf = self.create_nav_btn("performance", self.show_performance)
         self.btn_perf.grid(row=5, column=0, padx=15, pady=8, sticky="ew")
 
+        self.btn_compressor = self.create_nav_btn("compressor", self.show_compressor, fg_color="#7A3DFF", hover_color="#8F5BFF")
+        self.btn_compressor.grid(row=6, column=0, padx=15, pady=8, sticky="ew")
+
         self.btn_cheat = self.create_nav_btn("cheat", self.run_cheat_scan, fg_color="#A81010", hover_color="#E51A1A")
-        self.btn_cheat.grid(row=7, column=0, padx=15, pady=(30, 8), sticky="ew")
+        self.btn_cheat.grid(row=8, column=0, padx=15, pady=(30, 8), sticky="ew")
 
         self.btn_settings = self.create_nav_btn("settings", self.show_settings, fg_color="transparent", border=2)
-        self.btn_settings.grid(row=8, column=0, padx=15, pady=8, sticky="ew")
+        self.btn_settings.grid(row=9, column=0, padx=15, pady=8, sticky="ew")
 
         self.main_frame = ctk.CTkFrame(self, fg_color=("#FFFFFF", "#1E1E1E"), corner_radius=20)
         self.main_frame.grid(row=0, column=1, padx=25, pady=25, sticky="nsew")
 
         self.frames = {}
-        for F in ("home", "roster", "scores", "watch", "performance", "settings"):
+        for F in ("home", "roster", "scores", "watch", "performance", "compressor", "settings"):
             self.frames[F] = ctk.CTkFrame(self.main_frame, fg_color="transparent")
             self.frames[F].grid(row=0, column=0, sticky="nsew")
 
@@ -407,17 +501,18 @@ class App(ctk.CTk):
 
         self.build_home()
         self.build_roster()
-        self.buildScores = self.build_scores
+        self.build_scores()
         self.build_watch()
         self.build_performance()
+        self.build_compressor()
         self.build_settings()
 
-        # nav textleri de yenile
         self.btn_home.configure(text=self.texts[self.current_lang]["home"])
         self.btn_team.configure(text=self.texts[self.current_lang]["roster"])
         self.btn_scores.configure(text=self.texts[self.current_lang]["scores"])
         self.btn_watch.configure(text=self.texts[self.current_lang]["watch"])
         self.btn_perf.configure(text=self.texts[self.current_lang]["performance"])
+        self.btn_compressor.configure(text=self.texts[self.current_lang]["compressor"])
         self.btn_cheat.configure(text=self.texts[self.current_lang]["cheat"])
         self.btn_settings.configure(text=self.texts[self.current_lang]["settings"])
 
@@ -431,6 +526,7 @@ class App(ctk.CTk):
     def show_scores(self): self.show_frame("scores")
     def show_watch(self): self.show_frame("watch")
     def show_performance(self): self.show_frame("performance")
+    def show_compressor(self): self.show_frame("compressor")
     def show_settings(self): self.show_frame("settings")
 
     def build_home(self):
@@ -536,6 +632,35 @@ class App(ctk.CTk):
             height=55, fg_color="#3366FF", hover_color="#4A7BFF", corner_radius=14,
             command=self.boost_minecraft
         ).pack(side="left", padx=10, pady=20)
+
+    def build_compressor(self):
+        f = self.frames["compressor"]
+
+        ctk.CTkLabel(
+            f,
+            text=self.texts[self.current_lang]["compress_title"],
+            font=self.title_font,
+            text_color=("#121212", "#FFFFFF")
+        ).pack(pady=(60, 15))
+
+        ctk.CTkLabel(
+            f,
+            text=self.texts[self.current_lang]["compress_desc"],
+            font=self.main_font,
+            text_color="gray"
+        ).pack(pady=10)
+
+        ctk.CTkButton(
+            f,
+            text=self.texts[self.current_lang]["select_video"],
+            font=self.btn_font,
+            height=60,
+            width=320,
+            fg_color="#7A3DFF",
+            hover_color="#8F5BFF",
+            corner_radius=16,
+            command=self.compress_video_to_50mb
+        ).pack(pady=30)
 
     def build_settings(self):
         f = self.frames["settings"]
