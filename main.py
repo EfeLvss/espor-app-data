@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import json
 import requests
 import psutil
 import threading
@@ -21,49 +22,79 @@ ROSTER_URL = "https://raw.githubusercontent.com/EfeLvss/espor-app-data/refs/head
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
 
+
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("PlayzEsportHub")
-        self.geometry("1150x750")
+        self.geometry("1280x780")
         self.resizable(False, False)
 
         self.main_font = ctk.CTkFont(family="Segoe UI", size=14)
-        self.title_font = ctk.CTkFont(family="Segoe UI", size=28, weight="bold")
+        self.title_font = ctk.CTkFont(family="Segoe UI", size=30, weight="bold")
         self.btn_font = ctk.CTkFont(family="Segoe UI", size=15, weight="bold")
+        self.card_title_font = ctk.CTkFont(family="Segoe UI", size=20, weight="bold")
 
         self.current_lang = "TR"
+
         self.texts = {
             "TR": {
-                "home": "Ana Sayfa", "roster": "Takım Kadrosu", "scores": "Maç Skorları", "watch": "Maç İzle",
-                "cheat": "Anti-Cheat (Derin Tarama)", "settings": "Ayarlar", "welcome": "PlayzEsportHub'a Hoş Geldin!",
+                "home": "Ana Sayfa",
+                "roster": "Takım Kadrosu",
+                "scores": "Maç Skorları",
+                "watch": "Maç İzle",
+                "cheat": "Anti-Cheat (Derin Tarama)",
+                "settings": "Ayarlar",
+                "welcome": "PlayzEsportHub'a Hoş Geldin!",
                 "info": "Kadro takibi, skorlar ve canlı yayınlar.",
-                "game_select": "Kadro Seçimi", "roster_title": "Kadrosu",
-                "live_scores": "Canlı Maç Skorları", "start_stream": "🔴 EfeLvs Canlı İzle",
-                "theme": "Tema Değiştir", "lang": "Dil / Language",
-                "cheat_warn": "Tarama için oyunun açık olması lazım!", "clean": "Sistem Temiz!",
-                "found": "Zararlı işlem bulundu:", "scanning": "Derin tarama yapılıyor..."
+                "game_select": "Kadro Seçimi",
+                "roster_title": "Kadrosu",
+                "live_scores": "Canlı Maç Skorları",
+                "theme": "Tema Değiştir",
+                "lang": "Dil / Language",
+                "clean": "Sistem Temiz!",
+                "found": "Şüpheli öğe bulundu:",
+                "scanning": "Derin tarama başlatıldı...",
+                "watch_live": "🔴 Canlı Maç İzle",
+                "watch_history": "📺 Maç Geçmişini İzle",
+                "roster_panel_title": "Oyuncu Paneli",
+                "scan_done": "Tarama tamamlandı!",
+                "no_select": "Önce bir oyun seç!"
             },
             "EN": {
-                "home": "Home", "roster": "Roster", "scores": "Match Scores", "watch": "Watch Match",
-                "cheat": "Anti-Cheat (Deep Scan)", "settings": "Settings", "welcome": "Welcome to PlayzEsportHub!",
+                "home": "Home",
+                "roster": "Roster",
+                "scores": "Match Scores",
+                "watch": "Watch Match",
+                "cheat": "Anti-Cheat (Deep Scan)",
+                "settings": "Settings",
+                "welcome": "Welcome to PlayzEsportHub!",
                 "info": "Manage rosters, scores and live streams.",
-                "game_select": "Select Roster", "roster_title": "Roster",
-                "live_scores": "Live Match Scores", "start_stream": "🔴 Watch EfeLvs Live",
-                "theme": "Switch Theme", "lang": "Language / Dil",
-                "cheat_warn": "Game must be running for scan!", "clean": "System Clean!",
-                "found": "Suspicious process found:", "scanning": "Deep scanning..."
+                "game_select": "Select Roster",
+                "roster_title": "Roster",
+                "live_scores": "Live Match Scores",
+                "theme": "Switch Theme",
+                "lang": "Language / Dil",
+                "clean": "System Clean!",
+                "found": "Suspicious item found:",
+                "scanning": "Deep scan started...",
+                "watch_live": "🔴 Watch Live Match",
+                "watch_history": "📺 Watch Match History",
+                "roster_panel_title": "Player Panel",
+                "scan_done": "Scan completed!",
+                "no_select": "Select a game first!"
             }
         }
 
-        # ROBLOX BURAYA EKLENDİ
         self.roster_data = {
+            "Roblox": ["EfeLvs", "Oyuncu 2", "Oyuncu 3"],
             "Valorant": ["EfeLvs", "Talha"],
             "eFootball": ["Talha", "EfeLvs"],
             "Brawl Stars": ["Oyuncu 1"],
-            "Minecraft": ["Wurst Hunter"],
-            "Roblox": ["EfeLvs", "Oyuncu 2"]
+            "Minecraft": ["Wurst Hunter"]
         }
+
+        self.selected_game = None
 
         self.auto_update()
         self.fetch_remote_roster()
@@ -71,6 +102,7 @@ class App(ctk.CTk):
         self.setup_ui()
         threading.Thread(target=self.check_game_status, daemon=True).start()
 
+    # ---------------- AUTO UPDATE ----------------
     def auto_update(self):
         try:
             resp = requests.get(f"{VERSION_URL}?t={time.time()}", timeout=5)
@@ -87,13 +119,13 @@ class App(ctk.CTk):
         except:
             pass
 
+    # ---------------- REMOTE ROSTER ----------------
     def fetch_remote_roster(self):
         try:
             response = requests.get(f"{ROSTER_URL}?t={time.time()}", timeout=5)
             if response.status_code == 200:
                 remote_data = response.json()
 
-                # EKSİK OYUNLARI EKLE (ROBLOX KAYBOLMASIN)
                 for game, players in self.roster_data.items():
                     if game not in remote_data:
                         remote_data[game] = players
@@ -102,6 +134,7 @@ class App(ctk.CTk):
         except:
             pass
 
+    # ---------------- DISCORD RPC ----------------
     def connect_rpc(self):
         try:
             self.rpc = Presence(CLIENT_ID)
@@ -110,26 +143,34 @@ class App(ctk.CTk):
         except:
             pass
 
+    # ---------------- GAME STATUS ----------------
     def check_game_status(self):
         while True:
             try:
                 for proc in psutil.process_iter(['name']):
-                    if proc.info['name'] and proc.info['name'].lower() in ["javaw.exe", "valorant.exe", "minecraft.exe", "robloxplayerbeta.exe"]:
+                    pname = (proc.info['name'] or "").lower()
+                    if pname in ["javaw.exe", "valorant.exe", "minecraft.exe", "robloxplayerbeta.exe"]:
                         requests.post(WEBHOOK_URL, json={"content": f"🎮 Kullanıcı şu an {proc.info['name']} oynuyor!"})
                         return
             except:
                 pass
             time.sleep(60)
 
+    # ---------------- UI ----------------
     def setup_ui(self):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
 
-        self.nav_frame = ctk.CTkFrame(self, corner_radius=0, fg_color=("#F5F5F5", "#121212"))
+        self.nav_frame = ctk.CTkFrame(self, corner_radius=0, fg_color=("#F5F5F5", "#121212"), width=280)
         self.nav_frame.grid(row=0, column=0, sticky="nsew")
         self.nav_frame.grid_rowconfigure(8, weight=1)
 
-        self.logo_label = ctk.CTkLabel(self.nav_frame, text="PlayzEsport", font=self.title_font, text_color="#FF1493")
+        self.logo_label = ctk.CTkLabel(
+            self.nav_frame,
+            text="PlayzEsport",
+            font=self.title_font,
+            text_color="#FF1493"
+        )
         self.logo_label.grid(row=0, column=0, padx=25, pady=(35, 45))
 
         self.btn_home = self.create_nav_btn("home", self.show_home)
@@ -141,8 +182,8 @@ class App(ctk.CTk):
         self.btn_scores = self.create_nav_btn("scores", self.show_scores)
         self.btn_scores.grid(row=3, column=0, padx=15, pady=8, sticky="ew")
 
-        self.btn_kick = self.create_nav_btn("watch", self.show_kick)
-        self.btn_kick.grid(row=4, column=0, padx=15, pady=8, sticky="ew")
+        self.btn_watch = self.create_nav_btn("watch", self.show_watch)
+        self.btn_watch.grid(row=4, column=0, padx=15, pady=8, sticky="ew")
 
         self.btn_cheat = self.create_nav_btn("cheat", self.run_cheat_scan, fg_color="#A81010", hover_color="#E51A1A")
         self.btn_cheat.grid(row=6, column=0, padx=15, pady=(40, 8), sticky="ew")
@@ -154,7 +195,7 @@ class App(ctk.CTk):
         self.main_frame.grid(row=0, column=1, padx=25, pady=25, sticky="nsew")
 
         self.frames = {}
-        for F in ("home", "roster", "scores", "kick", "settings"):
+        for F in ("home", "roster", "scores", "watch", "settings"):
             self.frames[F] = ctk.CTkFrame(self.main_frame, fg_color="transparent")
             self.frames[F].grid(row=0, column=0, sticky="nsew")
 
@@ -176,8 +217,8 @@ class App(ctk.CTk):
                 border_width=border,
                 hover_color=("#E0E0E0", "#33001b"),
                 text_color="#FF1493",
-                height=45,
-                corner_radius=10,
+                height=50,
+                corner_radius=12,
                 command=command
             )
         return ctk.CTkButton(
@@ -186,8 +227,8 @@ class App(ctk.CTk):
             font=self.btn_font,
             fg_color=fg_color,
             hover_color=hover_color,
-            height=45,
-            corner_radius=10,
+            height=50,
+            corner_radius=12,
             command=command,
             text_color="white"
         )
@@ -196,10 +237,11 @@ class App(ctk.CTk):
         for f in self.frames.values():
             for w in f.winfo_children():
                 w.destroy()
+
         self.build_home()
         self.build_roster()
         self.build_scores()
-        self.build_kick()
+        self.build_watch()
         self.build_settings()
 
     def show_frame(self, name):
@@ -216,20 +258,23 @@ class App(ctk.CTk):
     def show_scores(self):
         self.show_frame("scores")
 
-    def show_kick(self):
-        self.show_frame("kick")
+    def show_watch(self):
+        self.show_frame("watch")
 
     def show_settings(self):
         self.show_frame("settings")
 
+    # ---------------- HOME ----------------
     def build_home(self):
         f = self.frames["home"]
+
         ctk.CTkLabel(
             f,
             text=self.texts[self.current_lang]["welcome"],
             font=self.title_font,
             text_color=("#121212", "#FFFFFF")
-        ).pack(pady=(60, 15))
+        ).pack(pady=(70, 15))
+
         ctk.CTkLabel(
             f,
             text=self.texts[self.current_lang]["info"],
@@ -237,8 +282,10 @@ class App(ctk.CTk):
             text_color="gray"
         ).pack(pady=10)
 
+    # ---------------- ROSTER WITH SIDE PANEL ----------------
     def build_roster(self):
         f = self.frames["roster"]
+
         ctk.CTkLabel(
             f,
             text=self.texts[self.current_lang]["game_select"],
@@ -246,12 +293,38 @@ class App(ctk.CTk):
             text_color=("#121212", "#FFFFFF")
         ).pack(pady=20)
 
-        sf = ctk.CTkScrollableFrame(f, fg_color="transparent")
-        sf.pack(fill="both", expand=True, padx=30)
+        container = ctk.CTkFrame(f, fg_color="transparent")
+        container.pack(fill="both", expand=True, padx=20, pady=10)
+
+        left = ctk.CTkScrollableFrame(container, width=420, fg_color="transparent")
+        left.pack(side="left", fill="y", padx=(0, 15), pady=10)
+
+        right = ctk.CTkFrame(container, corner_radius=18, fg_color=("#EEEEEE", "#222222"))
+        right.pack(side="left", fill="both", expand=True, pady=10)
+
+        self.roster_title_lbl = ctk.CTkLabel(
+            right,
+            text=self.texts[self.current_lang]["roster_panel_title"],
+            font=self.card_title_font,
+            text_color="#FF1493"
+        )
+        self.roster_title_lbl.pack(pady=(25, 10))
+
+        self.roster_info_lbl = ctk.CTkLabel(
+            right,
+            text="Bir oyun seç...",
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color=("#121212", "#FFFFFF"),
+            justify="left"
+        )
+        self.roster_info_lbl.pack(pady=20, padx=20, anchor="w")
+
+        self.player_box = ctk.CTkScrollableFrame(right, fg_color="transparent")
+        self.player_box.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
         for g in self.roster_data.keys():
             b = ctk.CTkButton(
-                sf,
+                left,
                 text=g,
                 font=self.btn_font,
                 height=70,
@@ -259,25 +332,44 @@ class App(ctk.CTk):
                 fg_color=("#EEEEEE", "#2A2A2A"),
                 text_color=("#121212", "#FFFFFF"),
                 hover_color="#FF1493",
-                command=lambda x=g: self.show_players(x)
+                command=lambda x=g: self.show_players_panel(x)
             )
             b.pack(pady=10, fill="x")
 
-        self.p_lbl = ctk.CTkLabel(
-            f,
-            text="",
-            font=ctk.CTkFont(size=18, weight="bold"),
-            text_color=("#121212", "#FFFFFF")
-        )
-        self.p_lbl.pack(pady=20)
+    def show_players_panel(self, game):
+        self.selected_game = game
 
-    def show_players(self, g):
-        self.p_lbl.configure(
-            text=f"━ {g} {self.texts[self.current_lang]['roster_title']} ━\n\n" + "\n".join(self.roster_data[g])
-        )
+        self.roster_info_lbl.configure(text=f"🎮 {game} {self.texts[self.current_lang]['roster_title']}")
 
+        for w in self.player_box.winfo_children():
+            w.destroy()
+
+        players = self.roster_data.get(game, [])
+
+        if not players:
+            ctk.CTkLabel(
+                self.player_box,
+                text="Oyuncu bulunamadı.",
+                font=self.main_font,
+                text_color="gray"
+            ).pack(pady=10)
+            return
+
+        for i, player in enumerate(players, start=1):
+            card = ctk.CTkFrame(self.player_box, corner_radius=14, fg_color=("#DDDDDD", "#2B2B2B"))
+            card.pack(fill="x", pady=8)
+
+            ctk.CTkLabel(
+                card,
+                text=f"{i}. {player}",
+                font=ctk.CTkFont(size=18, weight="bold"),
+                text_color=("#121212", "#FFFFFF")
+            ).pack(anchor="w", padx=18, pady=15)
+
+    # ---------------- SCORES ----------------
     def build_scores(self):
         f = self.frames["scores"]
+
         ctk.CTkLabel(
             f,
             text=self.texts[self.current_lang]["live_scores"],
@@ -295,19 +387,46 @@ class App(ctk.CTk):
             text_color="gray"
         ).pack(pady=20)
 
-    def build_kick(self):
-        f = self.frames["kick"]
-        ctk.CTkButton(
-            f,
-            text=self.texts[self.current_lang]["start_stream"],
-            font=self.btn_font,
-            height=60,
-            fg_color="#FF1493",
-            command=lambda: webbrowser.open("https://kick.com/efelvs")
-        ).pack(pady=100)
+    # ---------------- WATCH ----------------
+    def build_watch(self):
+        f = self.frames["watch"]
 
+        ctk.CTkLabel(
+            f,
+            text="Maç İzleme Merkezi",
+            font=self.title_font,
+            text_color=("#121212", "#FFFFFF")
+        ).pack(pady=(50, 30))
+
+        card = ctk.CTkFrame(f, corner_radius=20, fg_color=("#EEEEEE", "#222222"))
+        card.pack(padx=80, pady=20, fill="x")
+
+        ctk.CTkButton(
+            card,
+            text=self.texts[self.current_lang]["watch_live"],
+            font=self.btn_font,
+            height=65,
+            fg_color="#FF1493",
+            hover_color="#FF69B4",
+            corner_radius=14,
+            command=lambda: webbrowser.open("https://kick.com/efelvs")
+        ).pack(padx=30, pady=(30, 15), fill="x")
+
+        ctk.CTkButton(
+            card,
+            text=self.texts[self.current_lang]["watch_history"],
+            font=self.btn_font,
+            height=65,
+            fg_color=("#333333", "#333333"),
+            hover_color="#444444",
+            corner_radius=14,
+            command=lambda: webbrowser.open("https://www.youtube.com/")
+        ).pack(padx=30, pady=(0, 30), fill="x")
+
+    # ---------------- SETTINGS ----------------
     def build_settings(self):
         f = self.frames["settings"]
+
         ctk.CTkLabel(
             f,
             text=self.texts[self.current_lang]["settings"],
@@ -342,24 +461,108 @@ class App(ctk.CTk):
         self.current_lang = "EN" if self.current_lang == "TR" else "TR"
         self.refresh_ui()
 
+    # ---------------- REAL DEEP SCAN ----------------
     def run_cheat_scan(self):
         messagebox.showinfo("Anti-Cheat", self.texts[self.current_lang]["scanning"])
-        sigs = ["wurst", "cheatengine", "vape", "huzuni", "aimbot", "killaura", "metin2mod", "injector", "processhacker", "xenos", "dllinjector", "extremeinjector"]
-        found = False
+
+        suspicious_keywords = [
+            "wurst", "cheatengine", "vape", "huzuni", "aimbot", "killaura", "injector",
+            "processhacker", "xenos", "dllinjector", "extremeinjector", "krnl", "synapse",
+            "scriptware", "fluxus", "electron", "solara", "jjsploit", "executor",
+            "silentaim", "esp", "wallhack", "triggerbot", "autoclicker"
+        ]
+
+        found_items = []
+
+        # 1) PROCESS TARAMA
         try:
             for p in psutil.process_iter(['name', 'exe']):
-                time.sleep(0.01)
-                n = (p.info['name'] or "").lower()
-                path = (p.info['exe'] or "").lower()
-                if any(s in n or s in path for s in sigs):
-                    messagebox.showerror("ALARM", f"{self.texts[self.current_lang]['found']} {n}")
-                    found = True
-                    break
+                pname = (p.info['name'] or "").lower()
+                pexe = (p.info['exe'] or "").lower()
+
+                if any(k in pname or k in pexe for k in suspicious_keywords):
+                    found_items.append(f"PROCESS: {p.info['name']} | {p.info['exe']}")
         except:
             pass
 
-        if not found:
-            messagebox.showinfo("OK", self.texts[self.current_lang]["clean"])
+        # 2) KLASÖR TARAMA
+        scan_paths = []
+
+        try:
+            user_profile = os.path.expanduser("~")
+            appdata = os.getenv("APPDATA", "")
+            localappdata = os.getenv("LOCALAPPDATA", "")
+
+            scan_paths.extend([
+                os.path.join(user_profile, "Desktop"),
+                os.path.join(user_profile, "Downloads"),
+                os.path.join(user_profile, "Documents"),
+                os.path.join(user_profile, "AppData", "Roaming"),
+                os.path.join(user_profile, "AppData", "Local"),
+                os.path.join(user_profile, "AppData", "Local", "Temp"),
+                os.path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs", "Startup"),
+                os.path.join(localappdata, "Temp"),
+            ])
+        except:
+            pass
+
+        checked = set()
+        max_files = 3000
+
+        for base in scan_paths:
+            if not base or not os.path.exists(base):
+                continue
+            if base in checked:
+                continue
+            checked.add(base)
+
+            scanned_count = 0
+
+            try:
+                for root, dirs, files in os.walk(base):
+                    for name in files:
+                        scanned_count += 1
+                        if scanned_count > max_files:
+                            break
+
+                        lower_name = name.lower()
+                        full_path = os.path.join(root, name).lower()
+
+                        if any(k in lower_name or k in full_path for k in suspicious_keywords):
+                            found_items.append(f"FILE: {os.path.join(root, name)}")
+
+                    if scanned_count > max_files:
+                        break
+            except:
+                pass
+
+        # 3) STARTUP / AUTORUN BENZERİ BASİT KONTROL
+        try:
+            startup_folder = os.path.join(
+                os.getenv("APPDATA", ""),
+                "Microsoft", "Windows", "Start Menu", "Programs", "Startup"
+            )
+            if os.path.exists(startup_folder):
+                for item in os.listdir(startup_folder):
+                    item_lower = item.lower()
+                    if any(k in item_lower for k in suspicious_keywords):
+                        found_items.append(f"STARTUP: {os.path.join(startup_folder, item)}")
+        except:
+            pass
+
+        # SONUÇ
+        if found_items:
+            preview = "\n".join(found_items[:8])
+            if len(found_items) > 8:
+                preview += f"\n... ve {len(found_items)-8} tane daha"
+
+            messagebox.showerror(
+                "ALARM",
+                f"{self.texts[self.current_lang]['found']}\n\n{preview}"
+            )
+        else:
+            messagebox.showinfo("OK", f"{self.texts[self.current_lang]['clean']}\n{self.texts[self.current_lang]['scan_done']}")
+
 
 if __name__ == "__main__":
     app = App()
